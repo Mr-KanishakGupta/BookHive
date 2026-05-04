@@ -13,6 +13,7 @@ const SearchScreen = ({ navigation }) => {
   const { searchResults, searchBooksAction, isLoading, books, loadBooks } = useBooks();
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
+  const [activeDept, setActiveDept] = useState('all_dept');
   const [hasSearched, setHasSearched] = useState(false);
 
   const handleSearch = useCallback((text) => {
@@ -32,11 +33,20 @@ const SearchScreen = ({ navigation }) => {
     }
   }, [query, searchBooksAction]);
 
+  const handleDeptChange = useCallback((dept) => {
+    setActiveDept(dept);
+  }, []);
+
   const navigateToBook = (book) => {
     navigation.navigate('BookDetails', { bookId: book.id, book });
   };
 
-  const displayResults = hasSearched ? searchResults : [];
+  // Filter results by department if one is selected
+  const filteredResults = hasSearched
+    ? (activeDept === 'all_dept'
+        ? searchResults
+        : searchResults.filter(b => b.department === activeDept))
+    : [];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -54,13 +64,18 @@ const SearchScreen = ({ navigation }) => {
             placeholder="Search by title, author, genre..."
           />
         </View>
-        <FilterPanel activeFilter={activeFilter} onFilterChange={handleFilterChange} />
+        <FilterPanel
+          activeFilter={activeFilter}
+          onFilterChange={handleFilterChange}
+          activeDept={activeDept}
+          onDeptChange={handleDeptChange}
+        />
       </View>
 
       {/* Results */}
       {hasSearched ? (
         <FlatList
-          data={displayResults}
+          data={filteredResults}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <View style={{ paddingHorizontal: Spacing.lg }}>

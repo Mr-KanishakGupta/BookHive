@@ -3,7 +3,7 @@ import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { Typography, BorderRadius, Spacing } from '../theme/typography';
 
-const BookCard = ({ book, onPress, style, horizontal = false }) => {
+const BookCard = ({ book, onPress, style, horizontal = false, isCurated = false }) => {
   const { colors } = useTheme();
 
   if (horizontal) {
@@ -48,24 +48,40 @@ const BookCard = ({ book, onPress, style, horizontal = false }) => {
         <Text style={[Typography.bodySmBold, { color: colors.text }]} numberOfLines={2}>
           {book.title}
         </Text>
-        <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
-          {book.author}
-        </Text>
-        <View style={[styles.badge, {
-          backgroundColor: book.availableCopies > 0 ? colors.successLight : colors.errorLight,
-          marginTop: 6,
-          alignSelf: 'flex-start',
-        }]}>
-          <View style={[styles.dot, {
-            backgroundColor: book.availableCopies > 0 ? colors.success : colors.error,
-          }]} />
-          <Text style={[Typography.caption, {
-            color: book.availableCopies > 0 ? colors.success : colors.error,
-            fontWeight: '600',
-          }]}>
-            {book.availableCopies > 0 ? 'Available' : 'Unavailable'}
-          </Text>
-        </View>
+        
+        {isCurated ? (
+          <View style={styles.curatedInfo}>
+            <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 4 }]} numberOfLines={1}>
+              Rating: {book.rating || '4.5'}/5
+            </Text>
+            {book.recommended && (
+              <Text style={[Typography.caption, { color: colors.textSecondary }]} numberOfLines={1}>
+                Recommended
+              </Text>
+            )}
+          </View>
+        ) : (
+          <>
+            <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]} numberOfLines={1}>
+              {book.author}
+            </Text>
+            <View style={[styles.badge, {
+              backgroundColor: book.availableCopies > 0 ? colors.successLight : colors.errorLight,
+              marginTop: 6,
+              alignSelf: 'flex-start',
+            }]}>
+              <View style={[styles.dot, {
+                backgroundColor: book.availableCopies > 0 ? colors.success : colors.error,
+              }]} />
+              <Text style={[Typography.caption, {
+                color: book.availableCopies > 0 ? colors.success : colors.error,
+                fontWeight: '600',
+              }]}>
+                {book.availableCopies > 0 ? 'Available' : 'Unavailable'}
+              </Text>
+            </View>
+          </>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -90,6 +106,9 @@ const styles = StyleSheet.create({
   },
   info: {
     padding: Spacing.md,
+  },
+  curatedInfo: {
+    marginTop: 2,
   },
   badge: {
     flexDirection: 'row',

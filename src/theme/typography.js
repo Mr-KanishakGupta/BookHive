@@ -14,6 +14,14 @@ export const Typography = {
     lineHeight: 34,
     letterSpacing: -0.5,
   },
+  h1Large: {
+    fontFamily,
+    fontSize: 32,
+    fontWeight: '700',
+    lineHeight: 40,
+    letterSpacing: -0.5,
+    fontStyle: 'italic',
+  },
   h2: {
     fontFamily,
     fontSize: 24,
@@ -89,6 +97,32 @@ export const Typography = {
     fontWeight: '500',
     lineHeight: 14,
   },
+  // New styles for Stitch upgrade
+  chipLabel: {
+    fontFamily,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  statValue: {
+    fontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  announcementTitle: {
+    fontFamily,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  announcementTime: {
+    fontFamily,
+    fontSize: 12,
+    fontWeight: '400',
+    lineHeight: 16,
+    color: '#9AA0A6',
+  },
 };
 
 export const Spacing = {
@@ -107,5 +141,6 @@ export const BorderRadius = {
   md: 12,
   lg: 16,
   xl: 20,
+  xxl: 24,
   round: 999,
 };

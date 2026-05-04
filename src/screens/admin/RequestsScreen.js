@@ -1,0 +1,148 @@
+import React, { useState } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, StatusBar, Alert } from 'react-native';
+import { Menu, Clock, CheckCircle, XCircle, User, BookOpen, Calendar, Mail } from 'lucide-react-native';
+import { AdminColors } from '../../theme/colors';
+import { ISSUE_REQUESTS, EXTENSION_REQUESTS, STUDENTS, BOOKS } from '../../services/mockData';
+
+const RequestsScreen = ({ navigation }) => {
+  const [tab, setTab] = useState('borrow');
+  const borrowReqs = ISSUE_REQUESTS.filter(r => r.status === 'pending');
+  const extReqs = EXTENSION_REQUESTS.filter(r => r.status === 'pending');
+
+  const renderBorrow = ({ item }) => {
+    const student = STUDENTS.find(s => s.id === item.studentId);
+    const book = BOOKS.find(b => b.id === item.bookId);
+    return (
+      <View style={s.reqCard}>
+        <View style={s.reqTop}>
+          <View style={s.reqAvatar}><User size={20} color={AdminColors.navy} /></View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={s.reqName}>{student?.name}</Text>
+            <Text style={s.reqEmail}>{student?.email}</Text>
+            <View style={s.reqRow}><BookOpen size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Book: {book?.title}</Text></View>
+            <View style={s.reqRow}><Calendar size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Request Date: {item.requestDate}</Text></View>
+          </View>
+          <View style={s.reqActions}>
+            <TouchableOpacity style={s.approveBtn} onPress={() => Alert.alert('Approved', `Request for ${book?.title} approved`)}>
+              <CheckCircle size={16} color="#fff" /><Text style={s.appText}>Approve</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.rejectBtn} onPress={() => Alert.alert('Rejected', `Request rejected`)}>
+              <XCircle size={16} color={AdminColors.red} /><Text style={s.rejText}>Reject</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={s.reqNote}>
+          <Mail size={12} color={AdminColors.textMuted} />
+          <Text style={s.noteText}>Student will be notified via email automatically</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderExtension = ({ item }) => {
+    const student = STUDENTS.find(s => s.id === item.studentId);
+    const book = BOOKS.find(b => b.id === item.bookId);
+    return (
+      <View style={s.reqCard}>
+        <View style={s.reqTop}>
+          <View style={s.reqAvatar}><User size={20} color={AdminColors.purple} /></View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={s.reqName}>{student?.name}</Text>
+            <Text style={s.reqEmail}>{student?.email}</Text>
+            <View style={s.reqRow}><BookOpen size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Book: {book?.title}</Text></View>
+            <View style={s.reqRow}><Calendar size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Current Due: {item.originalDueDate}</Text></View>
+            <View style={s.reqRow}><Calendar size={13} color={AdminColors.orange} /><Text style={[s.reqInfo, { color: AdminColors.orange }]}>Requested: {item.requestedDueDate}</Text></View>
+            <Text style={s.reason}>Reason: {item.reason}</Text>
+          </View>
+          <View style={s.reqActions}>
+            <TouchableOpacity style={s.approveBtn} onPress={() => Alert.alert('Approved')}>
+              <CheckCircle size={16} color="#fff" /><Text style={s.appText}>Approve</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.rejectBtn} onPress={() => Alert.alert('Rejected')}>
+              <XCircle size={16} color={AdminColors.red} /><Text style={s.rejText}>Reject</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const data = tab === 'borrow' ? borrowReqs : extReqs;
+  const count = tab === 'borrow' ? borrowReqs.length : extReqs.length;
+
+  return (
+    <View style={s.container}>
+      <StatusBar barStyle="dark-content" />
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => navigation.openDrawer()} style={s.menuBtn}><Menu size={24} color={AdminColors.navy} /></TouchableOpacity>
+        <View style={{ flex: 1, marginLeft: 16 }}>
+          <Text style={s.title}>Requests Management</Text>
+          <Text style={s.sub}>Review and manage student requests</Text>
+        </View>
+      </View>
+      {/* Tabs */}
+      <View style={s.tabs}>
+        <TouchableOpacity style={[s.tab, tab === 'borrow' && s.tabActive]} onPress={() => setTab('borrow')}>
+          <Text style={[s.tabText, tab === 'borrow' && s.tabTextActive]}>Borrow Requests</Text>
+          <View style={[s.tabBadge, tab === 'borrow' && s.tabBadgeActive]}><Text style={[s.tabBadgeText, tab === 'borrow' && { color: '#fff' }]}>{borrowReqs.length}</Text></View>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.tab, tab === 'extension' && s.tabActive]} onPress={() => setTab('extension')}>
+          <Text style={[s.tabText, tab === 'extension' && s.tabTextActive]}>Extension Requests</Text>
+          <View style={[s.tabBadge, tab === 'extension' && s.tabBadgeActive]}><Text style={[s.tabBadgeText, tab === 'extension' && { color: '#fff' }]}>{extReqs.length}</Text></View>
+        </TouchableOpacity>
+      </View>
+      {/* Alert */}
+      {count > 0 && (
+        <View style={s.alert}>
+          <Clock size={18} color={AdminColors.orange} />
+          <View style={{ marginLeft: 10 }}>
+            <Text style={s.alertTitle}>{count} Pending Requests</Text>
+            <Text style={s.alertSub}>Review these requests as soon as possible</Text>
+          </View>
+        </View>
+      )}
+      <FlatList data={data} keyExtractor={i => i.id} renderItem={tab === 'borrow' ? renderBorrow : renderExtension}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}
+        ListEmptyComponent={<View style={s.empty}><Text style={s.emptyText}>No pending requests</Text></View>}
+      />
+    </View>
+  );
+};
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: AdminColors.bgGrey },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 50, paddingBottom: 16 },
+  menuBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center', elevation: 2 },
+  title: { fontSize: 22, fontWeight: '700', color: AdminColors.textPrimary },
+  sub: { fontSize: 12, color: AdminColors.textSecondary, marginTop: 2 },
+  tabs: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, backgroundColor: '#fff', borderRadius: 12, padding: 4, borderWidth: 1, borderColor: AdminColors.border },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10 },
+  tabActive: { backgroundColor: AdminColors.navy },
+  tabText: { fontSize: 13, fontWeight: '600', color: AdminColors.textSecondary },
+  tabTextActive: { color: '#fff' },
+  tabBadge: { marginLeft: 6, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: AdminColors.bgGrey },
+  tabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
+  tabBadgeText: { fontSize: 11, fontWeight: '700', color: AdminColors.textSecondary },
+  alert: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 12, padding: 14, backgroundColor: AdminColors.orangeLight, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: AdminColors.orange },
+  alertTitle: { fontSize: 14, fontWeight: '700', color: AdminColors.orange },
+  alertSub: { fontSize: 11, color: AdminColors.orange, marginTop: 1, opacity: 0.8 },
+  reqCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12, elevation: 1 },
+  reqTop: { flexDirection: 'row', alignItems: 'flex-start' },
+  reqAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: AdminColors.blueLight, justifyContent: 'center', alignItems: 'center' },
+  reqName: { fontSize: 15, fontWeight: '700', color: AdminColors.textPrimary },
+  reqEmail: { fontSize: 12, color: AdminColors.textSecondary, marginTop: 1 },
+  reqRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+  reqInfo: { fontSize: 12, color: AdminColors.textSecondary, marginLeft: 6 },
+  reason: { fontSize: 12, color: AdminColors.textMuted, marginTop: 4, fontStyle: 'italic' },
+  reqActions: { gap: 6 },
+  approveBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: AdminColors.green, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+  appText: { fontSize: 12, fontWeight: '600', color: '#fff', marginLeft: 4 },
+  rejectBtn: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: AdminColors.red, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
+  rejText: { fontSize: 12, fontWeight: '600', color: AdminColors.red, marginLeft: 4 },
+  reqNote: { flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: AdminColors.border },
+  noteText: { fontSize: 11, color: AdminColors.textMuted, marginLeft: 6 },
+  empty: { alignItems: 'center', paddingTop: 80 },
+  emptyText: { fontSize: 16, color: AdminColors.textMuted },
+});
+
+export default RequestsScreen;

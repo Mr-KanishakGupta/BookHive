@@ -127,6 +127,16 @@ const LoginScreen = ({ navigation }) => {
             </View>
           </View>
 
+          {/* Forgot Password */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ForgotPassword')}
+            style={styles.forgotLink}
+          >
+            <Text style={[Typography.bodySm, { color: colors.primary, fontWeight: '600' }]}>
+              Forgot Password?
+            </Text>
+          </TouchableOpacity>
+
           {/* Login Button */}
           <TouchableOpacity
             onPress={handleLogin}
@@ -208,6 +218,10 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: Spacing.lg,
+  },
+  forgotLink: {
+    alignSelf: 'flex-end',
+    marginTop: -Spacing.sm,
   },
   inputGroup: {},
   inputWrapper: {

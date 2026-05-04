@@ -46,7 +46,7 @@ const SplashScreen = ({ navigation }) => {
         transform: [{ scale: scaleAnim }],
       }]}>
         <View style={styles.iconCircle}>
-          <Ionicons name="library" size={60} color="#d4a373" />
+          <Ionicons name="library" size={60} color="#003366" />
         </View>
       </Animated.View>
       

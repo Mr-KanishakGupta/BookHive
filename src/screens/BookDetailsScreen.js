@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, Image, ScrollView, TouchableOpacity,
-  StyleSheet, Alert, StatusBar, ActivityIndicator,
+  StyleSheet, Alert, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useBooks } from '../context/BooksContext';
-import IssueRequestButton from '../components/IssueRequestButton';
-import AdvanceBookingButton from '../components/AdvanceBookingButton';
 import { Typography, BorderRadius, Spacing } from '../theme/typography';
 
 const BookDetailsScreen = ({ route, navigation }) => {
@@ -16,7 +14,7 @@ const BookDetailsScreen = ({ route, navigation }) => {
   const { user } = useAuth();
   const { requestIssue, advanceReserve } = useBooks();
   const { book: passedBook } = route.params;
-  const [book, setBook] = useState(passedBook);
+  const [book] = useState(passedBook);
   const [issueLoading, setIssueLoading] = useState(false);
   const [reserveLoading, setReserveLoading] = useState(false);
 
@@ -52,95 +50,114 @@ const BookDetailsScreen = ({ route, navigation }) => {
       <StatusBar barStyle="light-content" />
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Cover Section */}
-        <View style={[styles.coverSection, { backgroundColor: colors.primary }]}>
+        <View style={[styles.coverSection, { backgroundColor: colors.headerGradientStart }]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backButton}
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="chevron-back" size={28} color="#fff" />
           </TouchableOpacity>
-          <Image source={{ uri: book.coverUrl }} style={styles.coverImage} />
+          <Text style={[styles.headerTitle, { color: '#fff' }]}>Book Details</Text>
+          <View style={styles.coverShadow}>
+            <Image source={{ uri: book.coverUrl }} style={styles.coverImage} />
+          </View>
         </View>
 
-        {/* Book Info */}
+        {/* Info Section */}
         <View style={[styles.infoSection, { backgroundColor: colors.background }]}>
-          <Text style={[Typography.h2, { color: colors.text, textAlign: 'center' }]}>{book.title}</Text>
-          <Text style={[Typography.body, { color: colors.textSecondary, textAlign: 'center', marginTop: Spacing.sm }]}>
-            by {book.author}
-          </Text>
-
-          {/* Status Badge */}
-          <View style={[styles.statusBadge, {
-            backgroundColor: isAvailable ? colors.successLight : colors.errorLight,
-            alignSelf: 'center',
-            marginTop: Spacing.lg,
-          }]}>
-            <View style={[styles.statusDot, {
-              backgroundColor: isAvailable ? colors.success : colors.error,
-            }]} />
-            <Text style={[Typography.bodySmBold, {
-              color: isAvailable ? colors.success : colors.error,
-            }]}>
-              {isAvailable ? `${book.availableCopies} of ${book.totalCopies} Available` : 'Not Available'}
-            </Text>
-          </View>
-
-          {/* Details Grid */}
-          <View style={[styles.detailsGrid, { marginTop: Spacing.xxl }]}>
-            {[
-              { icon: 'bookmark-outline', label: 'Genre', value: book.genre },
-              { icon: 'calendar-outline', label: 'Year', value: String(book.year) },
-              { icon: 'barcode-outline', label: 'Book Code', value: book.bookCode },
-              { icon: 'pricetag-outline', label: 'Cost', value: `₹${book.cost}` },
-              { icon: 'copy-outline', label: 'Total Copies', value: String(book.totalCopies) },
-              { icon: 'document-text-outline', label: 'ISBN', value: book.isbn },
-            ].map((detail, index) => (
-              <View
-                key={detail.label}
-                style={[styles.detailItem, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}
-              >
-                <Ionicons name={detail.icon} size={18} color={colors.primary} />
-                <Text style={[Typography.caption, { color: colors.textMuted, marginTop: 4 }]}>{detail.label}</Text>
-                <Text style={[Typography.bodySmBold, { color: colors.text, marginTop: 2 }]} numberOfLines={1}>
-                  {detail.value}
-                </Text>
+          {/* Tag Chips */}
+          <View style={styles.chipRow}>
+            {['Physics', book.innerGenre].map((tag) => (
+              <View key={tag} style={[styles.chip, { backgroundColor: colors.chipBg }]}>
+                <Text style={[Typography.chipLabel, { color: colors.chipText }]}>{tag}</Text>
               </View>
             ))}
           </View>
-
-          {/* Description */}
-          <View style={[styles.descriptionCard, { backgroundColor: colors.surface, borderColor: colors.cardBorder }]}>
-            <Text style={[Typography.h4, { color: colors.text, marginBottom: Spacing.sm }]}>Description</Text>
-            <Text style={[Typography.bodySm, { color: colors.textSecondary, lineHeight: 22 }]}>
-              {book.description}
-            </Text>
+          <View style={styles.chipRow}>
+            <View style={[styles.chip, { backgroundColor: colors.chipBg }]}>
+              <Text style={[Typography.chipLabel, { color: colors.chipText }]}>Faculty of Science</Text>
+            </View>
           </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+          {/* Stats Row */}
+          <Text style={[Typography.h3, { color: colors.text, marginBottom: Spacing.md }]}>Book Stats</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statItem}>
+              <Ionicons name="star-outline" size={20} color={colors.primary} />
+              <Text style={[Typography.statValue, { color: colors.text, marginLeft: Spacing.xs }]}>{book.rating || '4.8'}/5</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="book-outline" size={20} color={colors.primary} />
+              <Text style={[Typography.statValue, { color: colors.text, marginLeft: Spacing.xs }]}>{book.pages || '420'} Pages</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Ionicons name="globe-outline" size={20} color={colors.primary} />
+              <Text style={[Typography.statValue, { color: colors.text, marginLeft: Spacing.xs }]}>{book.language || 'English'}</Text>
+            </View>
+          </View>
+
+          {/* Availability Badge */}
+          <View style={[styles.statusBadge, {
+            borderColor: isAvailable ? colors.success : colors.error,
+            backgroundColor: isAvailable ? colors.successLight : colors.errorLight,
+          }]}>
+            <Text style={[Typography.bodySmBold, { color: isAvailable ? colors.success : colors.error, marginRight: Spacing.xs }]}>
+              {isAvailable ? 'Available' : 'Unavailable'}
+            </Text>
+            <Ionicons 
+              name={isAvailable ? "checkmark-circle" : "close-circle"} 
+              size={16} 
+              color={isAvailable ? colors.success : colors.error} 
+            />
+          </View>
+
+          <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+
+          {/* About Section */}
+          <Text style={[Typography.h3, { color: colors.text, marginBottom: Spacing.sm }]}>About the Book</Text>
+          <Text style={[Typography.body, { color: colors.text, lineHeight: 24 }]}>
+            {book.description}
+          </Text>
+          
+          <TouchableOpacity style={[styles.readMoreButton, { backgroundColor: colors.primary }]}>
+            <Text style={[Typography.buttonSm, { color: '#fff' }]}>Read More</Text>
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: colors.divider, marginVertical: Spacing.xl }]} />
 
           {/* Action Buttons */}
           <View style={styles.actions}>
-            {isAvailable ? (
-              <IssueRequestButton
-                onPress={handleIssueRequest}
-                loading={issueLoading}
-                disabled={user?.isBlacklisted}
-              />
-            ) : (
-              <AdvanceBookingButton
-                onPress={handleAdvanceBooking}
-                loading={reserveLoading}
-                disabled={user?.isBlacklisted}
-                alreadyReserved={isAlreadyReserved}
-              />
-            )}
-            {user?.isBlacklisted && (
-              <View style={[styles.blacklistWarning, { backgroundColor: colors.errorLight }]}>
-                <Ionicons name="warning" size={16} color={colors.error} />
-                <Text style={[Typography.caption, { color: colors.error, marginLeft: 6, flex: 1 }]}>
-                  Your account is blacklisted. Please return overdue books.
-                </Text>
-              </View>
-            )}
+            <TouchableOpacity 
+              style={[styles.actionBtn, { backgroundColor: colors.primary }]}
+              onPress={handleIssueRequest}
+              disabled={user?.isBlacklisted || issueLoading}
+            >
+              <Text style={[Typography.button, { color: '#fff' }]}>
+                {issueLoading ? 'Requesting...' : 'Request Borrow'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.actionBtn, styles.actionBtnOutline, { borderColor: colors.primary }]}
+              onPress={handleAdvanceBooking}
+              disabled={user?.isBlacklisted || reserveLoading || isAlreadyReserved}
+            >
+              <Text style={[Typography.button, { color: colors.primary }]}>
+                {reserveLoading ? 'Booking...' : 'Advance Booking'}
+              </Text>
+            </TouchableOpacity>
           </View>
+
+          {user?.isBlacklisted && (
+            <View style={[styles.blacklistWarning, { backgroundColor: colors.errorLight }]}>
+              <Ionicons name="warning" size={16} color={colors.error} />
+              <Text style={[Typography.caption, { color: colors.error, marginLeft: 6, flex: 1 }]}>
+                Your account is blacklisted. Please return overdue books.
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -153,10 +170,8 @@ const styles = StyleSheet.create({
   },
   coverSection: {
     alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: Spacing.xxxl,
-    borderBottomLeftRadius: BorderRadius.xl,
-    borderBottomRightRadius: BorderRadius.xl,
+    paddingTop: 50,
+    paddingBottom: Spacing.xxl,
   },
   backButton: {
     position: 'absolute',
@@ -165,64 +180,96 @@ const styles = StyleSheet.create({
     zIndex: 1,
     width: 40,
     height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  coverImage: {
-    width: 160,
-    height: 230,
-    borderRadius: BorderRadius.md,
-    shadowOffset: { width: 0, height: 4 },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: Spacing.xl,
+  },
+  coverShadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowRadius: 15,
+    elevation: 10,
+    marginBottom: -80,
+  },
+  coverImage: {
+    width: 170,
+    height: 250,
+    borderRadius: BorderRadius.md,
   },
   infoSection: {
     padding: Spacing.xxl,
-    marginTop: -Spacing.lg,
+    paddingTop: 100,
+    borderTopLeftRadius: BorderRadius.xxl,
+    borderTopRightRadius: BorderRadius.xxl,
+    marginTop: -20,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.round,
+  },
+  divider: {
+    height: 1,
+    marginVertical: Spacing.lg,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.lg,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   statusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'center',
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
+    paddingVertical: 6,
     borderRadius: BorderRadius.round,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: Spacing.sm,
-  },
-  detailsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.md,
-  },
-  detailItem: {
-    width: '47%',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
-  descriptionCard: {
-    marginTop: Spacing.xxl,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
+  readMoreButton: {
+    alignSelf: 'center',
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.round,
+    marginTop: Spacing.lg,
   },
   actions: {
-    marginTop: Spacing.xxl,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     gap: Spacing.md,
-    paddingBottom: Spacing.xxxl,
+  },
+  actionBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.round,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnOutline: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
   },
   blacklistWarning: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: Spacing.md,
     borderRadius: BorderRadius.sm,
+    marginTop: Spacing.md,
   },
 });
 

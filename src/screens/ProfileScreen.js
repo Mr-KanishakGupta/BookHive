@@ -123,6 +123,17 @@ const ProfileScreen = ({ navigation }) => {
             QUICK ACTIONS
           </Text>
           <TouchableOpacity
+            onPress={() => navigation.navigate('EditProfile')}
+            style={styles.actionRow}
+          >
+            <View style={styles.settingLeft}>
+              <Ionicons name="create-outline" size={20} color={colors.primary} />
+              <Text style={[Typography.bodySm, { color: colors.text, marginLeft: Spacing.md }]}>Edit Profile</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+          <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+          <TouchableOpacity
             onPress={() => navigation.navigate('BorrowHistory')}
             style={styles.actionRow}
           >
@@ -178,7 +189,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#d4a373',
+    color: '#003366',
   },
   profileName: {
     fontSize: 20,
