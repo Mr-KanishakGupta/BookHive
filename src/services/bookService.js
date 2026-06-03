@@ -1,199 +1,150 @@
-import { BOOKS, BORROW_RECORDS, ISSUE_REQUESTS, ADVANCE_RESERVATIONS } from './mockData';
+import { db, storage } from '../config/firebase';
+import { 
+  collection, doc, getDoc, getDocs, setDoc, updateDoc, 
+  deleteDoc, query, where, orderBy, limit, writeBatch 
+} from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { generateBookCode } from '../utils/bookCodeGenerator';
 
-// Get all books
-export const getBooks = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve([...BOOKS]), 300);
-  });
+const booksRef = collection(db, 'books');
+
+// ----------------------------------------------------------------------------
+// Image Upload to Firebase Storage
+// ----------------------------------------------------------------------------
+export const uploadBookImage = async (uri, bookCode, isFront = true) => {
+  if (!uri) return null;
+  
+  try {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    
+    const filename = `books/${bookCode}/${isFront ? 'front' : 'rear'}.jpg`;
+    const imageRef = ref(storage, filename);
+    
+    await uploadBytes(imageRef, blob);
+    const downloadURL = await getDownloadURL(imageRef);
+    return downloadURL;
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    return null;
+  }
 };
 
-// Search books by query + filter type
-export const searchBooks = (query, filterType = 'title') => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const q = query.toLowerCase();
-      const results = BOOKS.filter(book => {
-        switch (filterType) {
-          case 'title': return book.title.toLowerCase().includes(q);
-          case 'author': return book.author.toLowerCase().includes(q);
-          case 'genre': return book.genre.toLowerCase().includes(q);
-          case 'bookCode': return book.bookCode.toLowerCase().includes(q);
-          default: return (
-            book.title.toLowerCase().includes(q) ||
-            book.author.toLowerCase().includes(q) ||
-            book.genre.toLowerCase().includes(q) ||
-            book.bookCode.toLowerCase().includes(q)
-          );
-        }
-      });
-      resolve(results);
-    }, 300);
-  });
+// ----------------------------------------------------------------------------
+// Core Book CRUD
+// ----------------------------------------------------------------------------
+export const getBooks = async () => {
+  const q = query(booksRef, orderBy('year', 'desc'));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, bookCode: doc.id, ...doc.data() }));
 };
 
-// Get book details
-export const getBookById = (bookId) => {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      const book = BOOKS.find(b => b.id === bookId);
-      if (book) resolve({ ...book });
-      else reject(new Error('Book not found'));
-    }, 200);
-  });
+export const getBookById = async (bookCode) => {
+  const docRef = doc(db, 'books', bookCode);
+  const snapshot = await getDoc(docRef);
+  if (!snapshot.exists()) throw new Error('Book not found');
+  return { id: snapshot.id, bookCode: snapshot.id, ...snapshot.data() };
 };
 
-// Request book issue
-export const requestIssue = (studentId, bookId) => {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      const book = BOOKS.find(b => b.id === bookId);
-      if (!book) return reject(new Error('Book not found'));
-      if (book.availableCopies <= 0) return reject(new Error('No copies available'));
+export const createBook = async (bookData, frontImageUri, rearImageUri) => {
+  // Count books in this genre for code generation
+  const q = query(booksRef, where('genre', '==', bookData.genre), where('innerGenre', '==', bookData.innerGenre));
+  const snapshot = await getDocs(q);
+  const count = snapshot.size;
 
-      const existingRequest = ISSUE_REQUESTS.find(
-        ir => ir.studentId === studentId && ir.bookId === bookId && ir.status === 'pending'
+  const bookCode = generateBookCode(bookData.year, bookData.genre, bookData.innerGenre, count + 1);
+  
+  // Upload images
+  const frontImage = await uploadBookImage(frontImageUri, bookCode, true);
+  const rearImage = await uploadBookImage(rearImageUri, bookCode, false);
+
+  const newBook = {
+    title: bookData.title,
+    author: bookData.author,
+    genre: bookData.genre,
+    innerGenre: bookData.innerGenre,
+    department: bookData.department,
+    year: Number(bookData.year),
+    totalCopies: Number(bookData.totalCopies),
+    availableCopies: Number(bookData.totalCopies),
+    cost: Number(bookData.cost),
+    frontImage: frontImage || '',
+    rearImage: rearImage || '',
+    createdAt: new Date().toISOString()
+  };
+
+  await setDoc(doc(db, 'books', bookCode), newBook);
+  return { id: bookCode, bookCode, ...newBook };
+};
+
+export const updateBook = async (bookCode, updates) => {
+  const docRef = doc(db, 'books', bookCode);
+  
+  // Handle copies update: adjust availableCopies by the difference
+  if (updates.totalCopies !== undefined) {
+    const book = await getBookById(bookCode);
+    const diff = Number(updates.totalCopies) - book.totalCopies;
+    updates.availableCopies = Math.max(0, book.availableCopies + diff);
+  }
+
+  await updateDoc(docRef, updates);
+  return await getBookById(bookCode);
+};
+
+export const deleteBook = async (bookCode) => {
+  await deleteDoc(doc(db, 'books', bookCode));
+};
+
+// ----------------------------------------------------------------------------
+// Client-side Search and Filtering (Simple implementation)
+// ----------------------------------------------------------------------------
+export const searchBooks = async (searchQuery, filterType = 'title') => {
+  const allBooks = await getBooks();
+  
+  if (!searchQuery) return allBooks;
+  
+  const q = searchQuery.toLowerCase();
+  
+  return allBooks.filter(book => {
+    switch (filterType) {
+      case 'title': return book.title?.toLowerCase().includes(q);
+      case 'author': return book.author?.toLowerCase().includes(q);
+      case 'genre': return book.genre?.toLowerCase().includes(q);
+      case 'bookCode': return book.bookCode?.toLowerCase().includes(q);
+      default: return (
+        book.title?.toLowerCase().includes(q) ||
+        book.author?.toLowerCase().includes(q) ||
+        book.genre?.toLowerCase().includes(q) ||
+        book.bookCode?.toLowerCase().includes(q)
       );
-      if (existingRequest) return reject(new Error('You already have a pending request for this book'));
-
-      resolve({ success: true, message: 'Issue request submitted successfully!' });
-    }, 500);
+    }
   });
 };
 
-// Advance reserve
-export const advanceReserve = (studentId, bookId) => {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      const book = BOOKS.find(b => b.id === bookId);
-      if (!book) return reject(new Error('Book not found'));
-      if (book.availableCopies > 0) return reject(new Error('Book is available, request issue instead'));
-      if (book.reservedBy) return reject(new Error('This book is already reserved by another student'));
-
-      resolve({ success: true, message: 'Advance reservation successful! You will be notified when available.' });
-    }, 500);
-  });
+// ----------------------------------------------------------------------------
+// Discovery Categories
+// ----------------------------------------------------------------------------
+export const getRecommendedBooks = async () => {
+  // Simple approximation: Random sample or highest rated/most borrowed.
+  // For now, returning recently added with a limit as a proxy.
+  const q = query(booksRef, orderBy('createdAt', 'desc'), limit(6));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, bookCode: doc.id, ...doc.data() }));
 };
 
-// Extend borrow period
-export const extendBorrow = (borrowRecordId) => {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      const record = BORROW_RECORDS.find(br => br.id === borrowRecordId);
-      if (!record) return reject(new Error('Borrow record not found'));
-      if (record.status !== 'active') return reject(new Error('Cannot extend: book is overdue'));
-
-      const book = BOOKS.find(b => b.id === record.bookId);
-      if (book && book.availableCopies > 0) {
-        resolve({ success: true, message: 'Borrow period extended by 7 days!' });
-      } else {
-        reject(new Error('Cannot extend: no additional copies available'));
-      }
-    }, 500);
-  });
+export const getRecentlyAddedBooks = async () => {
+  const q = query(booksRef, orderBy('year', 'desc'), limit(6));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, bookCode: doc.id, ...doc.data() }));
 };
 
-// Get student borrow history
-export const getBorrowHistory = (studentId) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const records = BORROW_RECORDS.filter(br => br.studentId === studentId).map(br => {
-        const book = BOOKS.find(b => b.id === br.bookId);
-        return { ...br, book };
-      });
-      resolve(records);
-    }, 300);
-  });
-};
-
-// Get active borrows
-export const getActiveBorrows = (studentId) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const records = BORROW_RECORDS.filter(
-        br => br.studentId === studentId && (br.status === 'active' || br.status === 'overdue')
-      ).map(br => {
-        const book = BOOKS.find(b => b.id === br.bookId);
-        return { ...br, book };
-      });
-      resolve(records);
-    }, 300);
-  });
-};
-
-// Get student fines
-export const getStudentFines = (studentId) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const records = BORROW_RECORDS.filter(
-        br => br.studentId === studentId && br.fine > 0
-      ).map(br => {
-        const book = BOOKS.find(b => b.id === br.bookId);
-        return { ...br, book };
-      });
-      const totalFine = records.reduce((sum, r) => sum + r.fine, 0);
-      resolve({ records, totalFine });
-    }, 300);
-  });
-};
-
-// Admin functions
-
-// Get pending issue requests
-export const getPendingIssueRequests = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const requests = ISSUE_REQUESTS.filter(ir => ir.status === 'pending').map(ir => {
-        const book = BOOKS.find(b => b.id === ir.bookId);
-        const student = require('./mockData').STUDENTS.find(s => s.id === ir.studentId);
-        return { ...ir, book, student };
-      });
-      resolve(requests);
-    }, 300);
-  });
-};
-
-// Get advance reservations
-export const getAdvanceReservations = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const reservations = ADVANCE_RESERVATIONS.map(ar => {
-        const book = BOOKS.find(b => b.id === ar.bookId);
-        const student = require('./mockData').STUDENTS.find(s => s.id === ar.studentId);
-        return { ...ar, book, student };
-      });
-      resolve(reservations);
-    }, 300);
-  });
-};
-
-// Get recommended books (random selection)
-export const getRecommendedBooks = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const shuffled = [...BOOKS].sort(() => 0.5 - Math.random());
-      resolve(shuffled.slice(0, 6));
-    }, 300);
-  });
-};
-
-// Get recently added books (by year)
-export const getRecentlyAddedBooks = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const sorted = [...BOOKS].sort((a, b) => b.year - a.year);
-      resolve(sorted.slice(0, 6));
-    }, 300);
-  });
-};
-
-// Get popular books (ones with less available copies = more borrowed)
-export const getPopularBooks = () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const sorted = [...BOOKS].sort((a, b) =>
-        (a.availableCopies / a.totalCopies) - (b.availableCopies / b.totalCopies)
-      );
-      resolve(sorted.slice(0, 6));
-    }, 300);
-  });
+export const getPopularBooks = async () => {
+  // Books with availableCopies < totalCopies (i.e. being borrowed)
+  // Approximated by fetching some books and sorting by borrow ratio client-side
+  const snapshot = await getDocs(query(booksRef, limit(20)));
+  const books = snapshot.docs.map(doc => ({ id: doc.id, bookCode: doc.id, ...doc.data() }));
+  
+  return books.sort((a, b) => 
+    (a.availableCopies / a.totalCopies) - (b.availableCopies / b.totalCopies)
+  ).slice(0, 6);
 };

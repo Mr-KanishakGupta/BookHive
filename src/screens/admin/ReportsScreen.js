@@ -2,7 +2,12 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, Alert } from 'react-native';
 import { Menu, BookOpen, Users, DollarSign, TrendingUp, Download, FileText, BarChart3 } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
-import { BOOKS, STUDENTS, FINES, DEPARTMENT_STATS, MOST_BORROWED, BORROW_RECORDS } from '../../services/mockData';
+const BOOKS = [];
+const STUDENTS = [];
+const FINES = [];
+const DEPARTMENT_STATS = [];
+const MOST_BORROWED = [];
+const BORROW_RECORDS = [];
 
 const ReportsScreen = ({ navigation }) => {
   const totalBooks = 188;

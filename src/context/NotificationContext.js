@@ -28,7 +28,7 @@ export const NotificationProvider = ({ children }) => {
       const count = await notificationService.getUnreadCount(studentId);
       setUnreadCount(count);
       setNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+        prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
       );
     }
   }, []);
@@ -36,7 +36,7 @@ export const NotificationProvider = ({ children }) => {
   const markAllAsRead = useCallback(async (studentId) => {
     await notificationService.markAllAsRead(studentId);
     setUnreadCount(0);
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   }, []);
 
   return (

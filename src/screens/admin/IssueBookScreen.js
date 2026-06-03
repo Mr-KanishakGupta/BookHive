@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, StatusBar, ScrollView, Alert } from 'react-native';
 import { Menu, BookOpen, Users, Calendar, CheckCircle, X } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
-import { BOOKS, STUDENTS } from '../../services/mockData';
+const BOOKS = [];
+const STUDENTS = [];
 
 const IssueBookScreen = ({ navigation }) => {
   const [student, setStudent] = useState('');

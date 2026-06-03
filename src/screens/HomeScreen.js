@@ -11,7 +11,8 @@ import BookCard from '../components/BookCard';
 import ActiveBorrowCard from '../components/ActiveBorrowCard';
 import AnnouncementCard from '../components/AnnouncementCard';
 import { Typography, BorderRadius, Spacing } from '../theme/typography';
-import { ANNOUNCEMENTS, CURATED_BOOKS } from '../services/mockData';
+const ANNOUNCEMENTS = [];
+const CURATED_BOOKS = [];
 
 const HomeScreen = ({ navigation }) => {
   const { colors } = useTheme();

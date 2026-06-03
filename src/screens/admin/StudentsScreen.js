@@ -1,49 +1,115 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, TextInput,
-  StyleSheet, StatusBar, Alert,
+  StyleSheet, StatusBar, Alert, ActivityIndicator
 } from 'react-native';
 import {
   Menu, Search, UserPlus, Mail, Building2, BookOpen,
   AlertCircle, Eye, Users as UsersIcon,
 } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
-import { STUDENTS, BORROW_RECORDS } from '../../services/mockData';
+import { getAllStudents, createStudent } from '../../services/studentService';
+import { collection, query, where, getCountFromServer } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 const StudentsScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
-  const totalBorrowed = BORROW_RECORDS.filter(br => br.status === 'active' || br.status === 'overdue').length;
-  const totalFines = STUDENTS.reduce((sum, s) => sum + s.fines, 0);
+  const [students, setStudents] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({ totalBorrowed: 0, totalFines: 0 });
+
+  const fetchStudents = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getAllStudents();
+      setStudents(data);
+
+      const q = query(collection(db, 'borrow_records'), where('status', 'in', ['BORROWED', 'OVERDUE']));
+      const borrowSnap = await getCountFromServer(q);
+      
+      const totalFines = data.reduce((sum, s) => sum + (s.fineAmount || 0), 0);
+      
+      setStats({
+        totalBorrowed: borrowSnap.data().count,
+        totalFines: totalFines,
+      });
+
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to fetch students');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', fetchStudents);
+    return unsubscribe;
+  }, [navigation]);
+
   const filteredStudents = useMemo(() => {
-    if (!appliedQuery.trim()) return STUDENTS;
+    if (!appliedQuery.trim()) return students;
     const q = appliedQuery.toLowerCase();
-    return STUDENTS.filter(s => s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q));
-  }, [appliedQuery]);
+    return students.filter(s => 
+      s.name?.toLowerCase().includes(q) || 
+      s.college_id?.toLowerCase().includes(q) || 
+      s.library_card_id?.toLowerCase().includes(q)
+    );
+  }, [appliedQuery, students]);
+
   const handleSearch = () => setAppliedQuery(searchQuery);
+
+  const handleAddStudent = () => {
+    Alert.prompt(
+      'Add Student',
+      'Enter Library Card ID, College Email, and USN separated by comma',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Add', 
+          onPress: async (val) => {
+            if (!val) return;
+            const parts = val.split(',');
+            if (parts.length >= 3) {
+              try {
+                await createStudent(parts[0].trim(), parts[1].trim(), parts[2].trim());
+                Alert.alert('Success', 'Student added successfully');
+                fetchStudents();
+              } catch (e) {
+                Alert.alert('Error', e.message);
+              }
+            } else {
+              Alert.alert('Error', 'Invalid format. Use: CardID, Email, USN');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const initialColors = ['#003366', '#6F42C1', '#28A745', '#DC3545', '#F57C00'];
 
   const renderStudent = ({ item, index }) => {
-    const borrowed = BORROW_RECORDS.filter(br => br.studentId === item.id && (br.status === 'active' || br.status === 'overdue')).length;
     return (
       <View style={s.card}>
         <View style={[s.avatar, { backgroundColor: initialColors[index % initialColors.length] }]}>
-          <Text style={s.avatarText}>{item.name.charAt(0)}</Text>
+          <Text style={s.avatarText}>{(item.name || item.library_card_id).charAt(0).toUpperCase()}</Text>
         </View>
-        <Text style={s.name}>{item.name}</Text>
-        <View style={s.row}><Mail size={12} color={AdminColors.textMuted} /><Text style={s.info} numberOfLines={1}>{item.email}</Text></View>
-        <View style={s.row}><Building2 size={12} color={AdminColors.textMuted} /><Text style={s.info} numberOfLines={1}>{item.department}</Text></View>
+        <Text style={s.name}>{item.name || item.library_card_id}</Text>
+        <View style={s.row}><Mail size={12} color={AdminColors.textMuted} /><Text style={s.info} numberOfLines={1}>{item.college_id}</Text></View>
+        <View style={s.row}><Building2 size={12} color={AdminColors.textMuted} /><Text style={s.info} numberOfLines={1}>{item.usn || 'N/A'}</Text></View>
         <View style={s.stats}>
-          <View style={s.si}><BookOpen size={12} color={AdminColors.textMuted} /><Text style={s.sl}> Borrowed</Text></View>
-          <Text style={s.sv}>{borrowed}</Text>
-          <View style={[s.si, { marginLeft: 16 }]}><AlertCircle size={12} color={AdminColors.textMuted} /><Text style={s.sl}> Fines</Text></View>
-          <Text style={[s.sv, item.fines > 0 && { color: AdminColors.red }]}>₹{item.fines}</Text>
+          <View style={s.si}><AlertCircle size={12} color={AdminColors.textMuted} /><Text style={s.sl}> Fines</Text></View>
+          <Text style={[s.sv, item.fineAmount > 0 && { color: AdminColors.red }]}>₹{item.fineAmount || 0}</Text>
         </View>
         <View style={s.footer}>
-          <TouchableOpacity style={s.detBtn} onPress={() => Alert.alert('Details', item.name)}>
+          <TouchableOpacity style={s.detBtn} onPress={() => Alert.alert('Details', item.name || item.library_card_id)}>
             <Eye size={14} color={AdminColors.textSecondary} /><Text style={s.detText}>View Details</Text>
           </TouchableOpacity>
-          {item.fines > 0 && <View style={s.badge}><Text style={s.badgeText}>Has Fines</Text></View>}
+          {(item.fineAmount > 0 || item.isBlacklisted) && (
+            <View style={s.badge}><Text style={s.badgeText}>{item.isBlacklisted ? 'Blacklisted' : 'Has Fines'}</Text></View>
+          )}
         </View>
       </View>
     );
@@ -58,32 +124,41 @@ const StudentsScreen = ({ navigation }) => {
           <Text style={s.title}>Manage Students</Text>
           <Text style={s.sub}>View and manage registered students</Text>
         </View>
-        <TouchableOpacity style={s.addBtn} onPress={() => Alert.alert('Add Student')}>
+        <TouchableOpacity style={s.addBtn} onPress={handleAddStudent}>
           <UserPlus size={18} color="#fff" /><Text style={s.addText}>Add Student</Text>
         </TouchableOpacity>
       </View>
-      <View style={s.sumRow}>
-        {[{ icon: Mail, v: STUDENTS.length, l: 'Total Students', ic: AdminColors.blue, bg: AdminColors.blueLight },
-          { icon: BookOpen, v: totalBorrowed, l: 'Books Borrowed', ic: AdminColors.navy, bg: AdminColors.blueLight },
-          { icon: AlertCircle, v: `₹${totalFines}`, l: 'Total Fines', ic: AdminColors.red, bg: AdminColors.redLight },
-        ].map((c, i) => (
-          <View key={i} style={s.sumCard}>
-            <View style={[s.sumIcon, { backgroundColor: c.bg }]}><c.icon size={18} color={c.ic} /></View>
-            <Text style={s.sumVal}>{c.v}</Text><Text style={s.sumLbl}>{c.l}</Text>
+
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={AdminColors.navy} />
+        </View>
+      ) : (
+        <>
+          <View style={s.sumRow}>
+            {[{ icon: Mail, v: students.length, l: 'Total Students', ic: AdminColors.blue, bg: AdminColors.blueLight },
+              { icon: BookOpen, v: stats.totalBorrowed, l: 'Books Borrowed', ic: AdminColors.navy, bg: AdminColors.blueLight },
+              { icon: AlertCircle, v: `₹${stats.totalFines}`, l: 'Total Fines', ic: AdminColors.red, bg: AdminColors.redLight },
+            ].map((c, i) => (
+              <View key={i} style={s.sumCard}>
+                <View style={[s.sumIcon, { backgroundColor: c.bg }]}><c.icon size={18} color={c.ic} /></View>
+                <Text style={s.sumVal}>{c.v}</Text><Text style={s.sumLbl}>{c.l}</Text>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
-      <View style={s.searchBox}>
-        <Search size={18} color={AdminColors.textMuted} />
-        <TextInput style={s.searchIn} placeholder="Search by name or email..." placeholderTextColor={AdminColors.textMuted} value={searchQuery} onChangeText={setSearchQuery} onSubmitEditing={handleSearch} />
-        <TouchableOpacity style={s.sBtn} onPress={handleSearch}><Text style={s.sBtnT}>Search</Text></TouchableOpacity>
-      </View>
-      <Text style={s.cnt}>{filteredStudents.length} students found</Text>
-      <FlatList data={filteredStudents} keyExtractor={i => i.id} renderItem={renderStudent}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={<View style={s.empty}><UsersIcon size={48} color={AdminColors.textMuted} /><Text style={s.emptyT}>No students found</Text></View>}
-      />
+          <View style={s.searchBox}>
+            <Search size={18} color={AdminColors.textMuted} />
+            <TextInput style={s.searchIn} placeholder="Search by name or email..." placeholderTextColor={AdminColors.textMuted} value={searchQuery} onChangeText={setSearchQuery} onSubmitEditing={handleSearch} />
+            <TouchableOpacity style={s.sBtn} onPress={handleSearch}><Text style={s.sBtnT}>Search</Text></TouchableOpacity>
+          </View>
+          <Text style={s.cnt}>{filteredStudents.length} students found</Text>
+          <FlatList data={filteredStudents} keyExtractor={i => i.id || i.library_card_id} renderItem={renderStudent}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32, gap: 12 }}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={<View style={s.empty}><UsersIcon size={48} color={AdminColors.textMuted} /><Text style={s.emptyT}>No students found</Text></View>}
+          />
+        </>
+      )}
     </View>
   );
 };

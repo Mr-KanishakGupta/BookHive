@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import * as bookService from '../services/bookService';
+import * as borrowService from '../services/borrowService';
+import * as fineService from '../services/fineService';
 
 const BooksContext = createContext();
 
@@ -53,7 +55,7 @@ export const BooksProvider = ({ children }) => {
   const loadActiveBorrows = useCallback(async (studentId) => {
     setIsLoading(true);
     try {
-      const data = await bookService.getActiveBorrows(studentId);
+      const data = await borrowService.getActiveBorrows(studentId);
       setActiveBorrows(data);
     } finally {
       setIsLoading(false);
@@ -63,7 +65,7 @@ export const BooksProvider = ({ children }) => {
   const loadBorrowHistory = useCallback(async (studentId) => {
     setIsLoading(true);
     try {
-      const data = await bookService.getBorrowHistory(studentId);
+      const data = await borrowService.getBorrowHistory(studentId);
       setBorrowHistory(data);
     } finally {
       setIsLoading(false);
@@ -72,21 +74,24 @@ export const BooksProvider = ({ children }) => {
 
   const loadFines = useCallback(async (studentId) => {
     try {
-      const data = await bookService.getStudentFines(studentId);
+      const data = await fineService.getStudentFines(studentId);
       setFines(data);
     } catch (e) { /* ignore */ }
   }, []);
 
   const requestIssue = useCallback(async (studentId, bookId) => {
-    return await bookService.requestIssue(studentId, bookId);
+    return await borrowService.requestBorrow(studentId, bookId);
   }, []);
 
   const advanceReserve = useCallback(async (studentId, bookId) => {
-    return await bookService.advanceReserve(studentId, bookId);
+    // advanceReserve was removed from spec, leaving as a placeholder or you can implement it later
+    // return await bookService.advanceReserve(studentId, bookId);
+    throw new Error('Advance reservations are currently disabled in the new system.');
   }, []);
 
   const extendBorrow = useCallback(async (borrowRecordId) => {
-    return await bookService.extendBorrow(borrowRecordId);
+    throw new Error('Extensions are to be implemented.');
+    // return await borrowService.extendBorrow(borrowRecordId);
   }, []);
 
   return (

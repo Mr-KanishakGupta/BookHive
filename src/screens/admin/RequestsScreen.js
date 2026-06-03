@@ -1,74 +1,84 @@
-import React, { useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, StatusBar, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { Menu, Clock, CheckCircle, XCircle, User, BookOpen, Calendar, Mail } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
-import { ISSUE_REQUESTS, EXTENSION_REQUESTS, STUDENTS, BOOKS } from '../../services/mockData';
+import { getPendingRequests, approveBorrow, rejectBorrow } from '../../services/borrowService';
 
 const RequestsScreen = ({ navigation }) => {
   const [tab, setTab] = useState('borrow');
-  const borrowReqs = ISSUE_REQUESTS.filter(r => r.status === 'pending');
-  const extReqs = EXTENSION_REQUESTS.filter(r => r.status === 'pending');
+  const [borrowReqs, setBorrowReqs] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchRequests = async () => {
+    setIsLoading(true);
+    try {
+      const reqs = await getPendingRequests();
+      setBorrowReqs(reqs);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to load requests');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', fetchRequests);
+    return unsubscribe;
+  }, [navigation]);
+
+  const handleApprove = async (id) => {
+    try {
+      await approveBorrow(id, 'admin'); // Pass actual admin ID if using authContext
+      Alert.alert('Approved', 'Borrow request approved successfully.');
+      fetchRequests();
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  const handleReject = async (id) => {
+    try {
+      await rejectBorrow(id);
+      Alert.alert('Rejected', 'Borrow request rejected.');
+      fetchRequests();
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  };
 
   const renderBorrow = ({ item }) => {
-    const student = STUDENTS.find(s => s.id === item.studentId);
-    const book = BOOKS.find(b => b.id === item.bookId);
+    const student = item.student;
+    const book = item.book;
     return (
       <View style={s.reqCard}>
         <View style={s.reqTop}>
           <View style={s.reqAvatar}><User size={20} color={AdminColors.navy} /></View>
           <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={s.reqName}>{student?.name}</Text>
-            <Text style={s.reqEmail}>{student?.email}</Text>
+            <Text style={s.reqName}>{student?.name || student?.id}</Text>
+            <Text style={s.reqEmail}>{student?.college_id || 'N/A'}</Text>
             <View style={s.reqRow}><BookOpen size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Book: {book?.title}</Text></View>
-            <View style={s.reqRow}><Calendar size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Request Date: {item.requestDate}</Text></View>
+            <View style={s.reqRow}><Calendar size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Request Date: {new Date(item.createdAt).toLocaleDateString()}</Text></View>
           </View>
           <View style={s.reqActions}>
-            <TouchableOpacity style={s.approveBtn} onPress={() => Alert.alert('Approved', `Request for ${book?.title} approved`)}>
+            <TouchableOpacity style={s.approveBtn} onPress={() => handleApprove(item.id)}>
               <CheckCircle size={16} color="#fff" /><Text style={s.appText}>Approve</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.rejectBtn} onPress={() => Alert.alert('Rejected', `Request rejected`)}>
+            <TouchableOpacity style={s.rejectBtn} onPress={() => handleReject(item.id)}>
               <XCircle size={16} color={AdminColors.red} /><Text style={s.rejText}>Reject</Text>
             </TouchableOpacity>
           </View>
         </View>
         <View style={s.reqNote}>
           <Mail size={12} color={AdminColors.textMuted} />
-          <Text style={s.noteText}>Student will be notified via email automatically</Text>
+          <Text style={s.noteText}>Student will be notified automatically</Text>
         </View>
       </View>
     );
   };
 
-  const renderExtension = ({ item }) => {
-    const student = STUDENTS.find(s => s.id === item.studentId);
-    const book = BOOKS.find(b => b.id === item.bookId);
-    return (
-      <View style={s.reqCard}>
-        <View style={s.reqTop}>
-          <View style={s.reqAvatar}><User size={20} color={AdminColors.purple} /></View>
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <Text style={s.reqName}>{student?.name}</Text>
-            <Text style={s.reqEmail}>{student?.email}</Text>
-            <View style={s.reqRow}><BookOpen size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Book: {book?.title}</Text></View>
-            <View style={s.reqRow}><Calendar size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Current Due: {item.originalDueDate}</Text></View>
-            <View style={s.reqRow}><Calendar size={13} color={AdminColors.orange} /><Text style={[s.reqInfo, { color: AdminColors.orange }]}>Requested: {item.requestedDueDate}</Text></View>
-            <Text style={s.reason}>Reason: {item.reason}</Text>
-          </View>
-          <View style={s.reqActions}>
-            <TouchableOpacity style={s.approveBtn} onPress={() => Alert.alert('Approved')}>
-              <CheckCircle size={16} color="#fff" /><Text style={s.appText}>Approve</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.rejectBtn} onPress={() => Alert.alert('Rejected')}>
-              <XCircle size={16} color={AdminColors.red} /><Text style={s.rejText}>Reject</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const data = tab === 'borrow' ? borrowReqs : extReqs;
-  const count = tab === 'borrow' ? borrowReqs.length : extReqs.length;
+  const data = tab === 'borrow' ? borrowReqs : [];
+  const count = borrowReqs.length;
 
   return (
     <View style={s.container}>
@@ -80,7 +90,7 @@ const RequestsScreen = ({ navigation }) => {
           <Text style={s.sub}>Review and manage student requests</Text>
         </View>
       </View>
-      {/* Tabs */}
+      
       <View style={s.tabs}>
         <TouchableOpacity style={[s.tab, tab === 'borrow' && s.tabActive]} onPress={() => setTab('borrow')}>
           <Text style={[s.tabText, tab === 'borrow' && s.tabTextActive]}>Borrow Requests</Text>
@@ -88,11 +98,11 @@ const RequestsScreen = ({ navigation }) => {
         </TouchableOpacity>
         <TouchableOpacity style={[s.tab, tab === 'extension' && s.tabActive]} onPress={() => setTab('extension')}>
           <Text style={[s.tabText, tab === 'extension' && s.tabTextActive]}>Extension Requests</Text>
-          <View style={[s.tabBadge, tab === 'extension' && s.tabBadgeActive]}><Text style={[s.tabBadgeText, tab === 'extension' && { color: '#fff' }]}>{extReqs.length}</Text></View>
+          <View style={[s.tabBadge, tab === 'extension' && s.tabBadgeActive]}><Text style={[s.tabBadgeText, tab === 'extension' && { color: '#fff' }]}>0</Text></View>
         </TouchableOpacity>
       </View>
-      {/* Alert */}
-      {count > 0 && (
+      
+      {count > 0 && tab === 'borrow' && (
         <View style={s.alert}>
           <Clock size={18} color={AdminColors.orange} />
           <View style={{ marginLeft: 10 }}>
@@ -101,10 +111,17 @@ const RequestsScreen = ({ navigation }) => {
           </View>
         </View>
       )}
-      <FlatList data={data} keyExtractor={i => i.id} renderItem={tab === 'borrow' ? renderBorrow : renderExtension}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}
-        ListEmptyComponent={<View style={s.empty}><Text style={s.emptyText}>No pending requests</Text></View>}
-      />
+
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={AdminColors.navy} />
+        </View>
+      ) : (
+        <FlatList data={data} keyExtractor={i => i.id} renderItem={renderBorrow}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<View style={s.empty}><Text style={s.emptyText}>No pending requests</Text></View>}
+        />
+      )}
     </View>
   );
 };

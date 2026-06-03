@@ -1,38 +1,92 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, StatusBar, ImageBackground,
+  StyleSheet, StatusBar, ActivityIndicator
 } from 'react-native';
 import {
   Menu, BookOpen, Clock, Users,
-  ClipboardList, CheckCircle, XCircle
+  ClipboardList
 } from 'lucide-react-native';
 import { AdminColors } from '../theme/colors';
 import { Typography, Spacing, BorderRadius } from '../theme/typography';
-import { ISSUE_REQUESTS, BOOKS } from '../services/mockData';
+import { collection, getDocs, query, where, getCountFromServer } from 'firebase/firestore';
+import { db } from '../config/firebase';
+import { getPendingRequests, approveBorrow, rejectBorrow } from '../services/borrowService';
 
 const AdminDashboardScreen = ({ navigation }) => {
-  const totalBooks = 12500;
-  const activeBorrows = 450;
-  const pendingRequests = 35;
-  const overdueFines = 210;
+  const [stats, setStats] = useState({
+    totalBooks: 0,
+    activeBorrows: 0,
+    pendingRequests: 0,
+    overdueFines: 0,
+  });
+  const [pendingTasks, setPendingTasks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchDashboardData = async () => {
+    try {
+      // 1. Stats
+      const booksSnap = await getCountFromServer(collection(db, 'books'));
+      
+      const borrowQ = query(collection(db, 'borrow_records'), where('status', 'in', ['BORROWED', 'OVERDUE']));
+      const borrowsSnap = await getCountFromServer(borrowQ);
+      
+      const reqsQ = query(collection(db, 'borrow_records'), where('status', '==', 'PENDING'));
+      const reqsSnap = await getCountFromServer(reqsQ);
+      
+      const duesSnap = await getDocs(query(collection(db, 'due_books'), where('fine', '>', 0)));
+      let totalFines = 0;
+      duesSnap.forEach(doc => totalFines += doc.data().fine);
+
+      setStats({
+        totalBooks: booksSnap.data().count,
+        activeBorrows: borrowsSnap.data().count,
+        pendingRequests: reqsSnap.data().count,
+        overdueFines: totalFines
+      });
+
+      // 2. Pending Requests List (limit to a few)
+      const requests = await getPendingRequests();
+      setPendingTasks(requests.slice(0, 3));
+
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchDashboardData();
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  const handleApprove = async (id) => {
+    await approveBorrow(id, 'admin'); // Pass actual admin ID if needed
+    fetchDashboardData();
+  };
+
+  const handleReject = async (id) => {
+    await rejectBorrow(id);
+    fetchDashboardData();
+  };
 
   const statsCards = [
-    { label: 'Total Books', value: totalBooks.toLocaleString(), icon: BookOpen },
-    { label: 'Active Borrows', value: activeBorrows, icon: Users },
-    { label: 'Pending Requests', value: pendingRequests, icon: ClipboardList },
-    { label: 'Overdue Fines', value: `$${overdueFines}`, icon: Clock },
+    { label: 'Total Books', value: stats.totalBooks.toLocaleString(), icon: BookOpen },
+    { label: 'Active Borrows', value: stats.activeBorrows, icon: Users },
+    { label: 'Pending Requests', value: stats.pendingRequests, icon: ClipboardList },
+    { label: 'Overdue Fines', value: `₹${stats.overdueFines}`, icon: Clock },
   ];
 
-  // We need names for these requests
-  const pendingTasks = ISSUE_REQUESTS.filter(ir => ir.status === 'pending').map((req, index) => {
-    const book = BOOKS.find(b => b.id === req.bookId);
-    return {
-      id: req.id,
-      studentName: 'John Doe', // Mock name since we don't look up the student directly in this simple loop
-      bookTitle: book ? book.title : 'Unknown Book',
-    };
-  });
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={AdminColors.adminAccentBlue} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -75,37 +129,23 @@ const AdminDashboardScreen = ({ navigation }) => {
         {/* Pending Tasks Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Pending Tasks</Text>
-          {pendingTasks.map((task) => (
+          {pendingTasks.length === 0 ? (
+            <Text style={{ color: AdminColors.adminTextSecondary }}>No pending requests.</Text>
+          ) : pendingTasks.map((task) => (
             <View key={task.id} style={styles.taskCard}>
               <Text style={styles.taskText}>
-                {task.studentName} requested{'\n'}"{task.bookTitle}"
+                {task.student?.name || task.studentId} requested{'\n'}"{task.book?.title || 'Unknown Book'}"
               </Text>
               <View style={styles.taskActions}>
-                <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]} activeOpacity={0.8}>
+                <TouchableOpacity onPress={() => handleApprove(task.id)} style={[styles.actionBtn, styles.approveBtn]} activeOpacity={0.8}>
                   <Text style={styles.btnText}>Approve</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} activeOpacity={0.8}>
+                <TouchableOpacity onPress={() => handleReject(task.id)} style={[styles.actionBtn, styles.rejectBtn]} activeOpacity={0.8}>
                   <Text style={styles.btnText}>Reject</Text>
                 </TouchableOpacity>
               </View>
             </View>
           ))}
-          {/* Add a couple dummy requests to match the screenshot visually */}
-          {pendingTasks.length < 3 && (
-            <View style={styles.taskCard}>
-              <Text style={styles.taskText}>
-                John Doe requested{'\n'}"Introduction to Algorithms"
-              </Text>
-              <View style={styles.taskActions}>
-                <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]} activeOpacity={0.8}>
-                  <Text style={styles.btnText}>Approve</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} activeOpacity={0.8}>
-                  <Text style={styles.btnText}>Reject</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
         </View>
 
         <View style={{ height: Spacing.xxxl }} />
@@ -166,7 +206,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: AdminColors.adminCardBorder,
     padding: Spacing.lg,
-    // Add subtle shadow to enhance glass effect
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,

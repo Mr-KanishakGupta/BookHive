@@ -10,15 +10,16 @@ import { Typography, BorderRadius, Spacing } from '../theme/typography';
 
 const SignupScreen = ({ navigation }) => {
   const { colors } = useTheme();
-  const { signup, fetchStudentByCard, isLoading, clearError } = useAuth();
-  const [step, setStep] = useState(1); // 1: enter card, 2: confirm info + set password
+  const { signup, fetchStudentByCard, requestOTP, isLoading, clearError } = useAuth();
+  const [step, setStep] = useState(1); // 1: enter card, 2: enter otp, 3: confirm + password
   const [cardNumber, setCardNumber] = useState('');
+  const [otp, setOtp] = useState('');
   const [studentInfo, setStudentInfo] = useState(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const handleFetchInfo = async () => {
+  const handleFetchAndOTP = async () => {
     if (!cardNumber.trim()) {
       Alert.alert('Error', 'Please enter your Library Card Number');
       return;
@@ -27,10 +28,23 @@ const SignupScreen = ({ navigation }) => {
       clearError();
       const info = await fetchStudentByCard(cardNumber.trim());
       setStudentInfo(info);
+      
+      // Request OTP
+      await requestOTP(cardNumber.trim());
+      
       setStep(2);
+      Alert.alert('Success', 'OTP sent to your college email.');
     } catch (e) {
-      Alert.alert('Not Found', e.message);
+      Alert.alert('Error', e.message);
     }
+  };
+
+  const handleVerifyOTP = () => {
+    if (!otp.trim() || otp.length < 6) {
+      Alert.alert('Error', 'Please enter a valid 6-digit OTP');
+      return;
+    }
+    setStep(3);
   };
 
   const handleSignup = async () => {
@@ -48,7 +62,7 @@ const SignupScreen = ({ navigation }) => {
     }
     try {
       clearError();
-      await signup(cardNumber.trim(), password);
+      await signup(cardNumber.trim(), otp.trim(), password);
     } catch (e) {
       Alert.alert('Signup Failed', e.message);
     }
@@ -70,19 +84,22 @@ const SignupScreen = ({ navigation }) => {
         <View style={styles.header}>
           <Text style={[Typography.h1, { color: colors.text }]}>Create Account</Text>
           <Text style={[Typography.body, { color: colors.textSecondary, marginTop: Spacing.sm }]}>
-            {step === 1 ? 'Enter your Library Card Number to get started' : 'Confirm your details and set a password'}
+            {step === 1 && 'Enter your Library Card Number'}
+            {step === 2 && 'Enter the OTP sent to your email'}
+            {step === 3 && 'Confirm your details and set a password'}
           </Text>
         </View>
 
         {/* Step Indicator */}
         <View style={styles.stepIndicator}>
           <View style={[styles.stepDot, { backgroundColor: colors.primary }]} />
-          <View style={[styles.stepLine, { backgroundColor: step === 2 ? colors.primary : colors.border }]} />
-          <View style={[styles.stepDot, { backgroundColor: step === 2 ? colors.primary : colors.border }]} />
+          <View style={[styles.stepLine, { backgroundColor: step >= 2 ? colors.primary : colors.border }]} />
+          <View style={[styles.stepDot, { backgroundColor: step >= 2 ? colors.primary : colors.border }]} />
+          <View style={[styles.stepLine, { backgroundColor: step >= 3 ? colors.primary : colors.border }]} />
+          <View style={[styles.stepDot, { backgroundColor: step >= 3 ? colors.primary : colors.border }]} />
         </View>
 
-        {step === 1 ? (
-          /* Step 1: Library Card */
+        {step === 1 && (
           <View style={styles.form}>
             <View style={styles.inputGroup}>
               <Text style={[Typography.bodySmBold, { color: colors.text, marginBottom: 6 }]}>Library Card Number</Text>
@@ -99,24 +116,49 @@ const SignupScreen = ({ navigation }) => {
               </View>
             </View>
 
-            <TouchableOpacity onPress={handleFetchInfo} disabled={isLoading}
+            <TouchableOpacity onPress={handleFetchAndOTP} disabled={isLoading}
               style={[styles.button, { backgroundColor: colors.primary }]} activeOpacity={0.8}>
               {isLoading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={[Typography.button, { color: '#fff' }]}>Verify Card</Text>
+                <Text style={[Typography.button, { color: '#fff' }]}>Verify & Send OTP</Text>
               )}
             </TouchableOpacity>
+          </View>
+        )}
 
-            <View style={[styles.infoBox, { backgroundColor: colors.accentLight, borderColor: colors.accent }]}>
-              <Ionicons name="information-circle" size={16} color={colors.accent} />
-              <Text style={[Typography.caption, { color: colors.textSecondary, marginLeft: 6, flex: 1 }]}>
-                Demo cards: BMSCE2024001, BMSCE2024002, BMSCE2024003, BMSCE2024004
-              </Text>
+        {step === 2 && (
+          <View style={styles.form}>
+            <View style={styles.inputGroup}>
+              <Text style={[Typography.bodySmBold, { color: colors.text, marginBottom: 6 }]}>One-Time Password</Text>
+              <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                <Ionicons name="keypad-outline" size={20} color={colors.textMuted} />
+                <TextInput
+                  value={otp}
+                  onChangeText={setOtp}
+                  placeholder="6-digit OTP"
+                  placeholderTextColor={colors.textMuted}
+                  style={[Typography.body, styles.input, { color: colors.text }]}
+                  keyboardType="numeric"
+                  maxLength={6}
+                />
+              </View>
+            </View>
+
+            <View style={styles.buttonRow}>
+              <TouchableOpacity onPress={() => setStep(1)}
+                style={[styles.backStepButton, { borderColor: colors.border }]}>
+                <Text style={[Typography.buttonSm, { color: colors.textSecondary }]}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleVerifyOTP} disabled={isLoading}
+                style={[styles.button, { backgroundColor: colors.primary, flex: 1, marginLeft: Spacing.md }]} activeOpacity={0.8}>
+                <Text style={[Typography.button, { color: '#fff' }]}>Continue</Text>
+              </TouchableOpacity>
             </View>
           </View>
-        ) : (
-          /* Step 2: Confirm Info + Set Password */
+        )}
+
+        {step === 3 && (
           <View style={styles.form}>
             {/* Auto-fetched info card */}
             <View style={[styles.infoCard, { backgroundColor: colors.successLight, borderColor: colors.success }]}>
@@ -126,9 +168,9 @@ const SignupScreen = ({ navigation }) => {
               </View>
               {[
                 { label: 'Name', value: studentInfo?.name },
-                { label: 'Email', value: studentInfo?.email },
+                { label: 'Email', value: studentInfo?.college_id },
                 { label: 'USN', value: studentInfo?.usn },
-                { label: 'Library Card', value: studentInfo?.libraryCardNumber },
+                { label: 'Library Card', value: studentInfo?.library_card_id },
               ].map(item => (
                 <View key={item.label} style={styles.infoRow}>
                   <Text style={[Typography.caption, { color: colors.textMuted, width: 90 }]}>{item.label}</Text>
@@ -172,7 +214,7 @@ const SignupScreen = ({ navigation }) => {
             </View>
 
             <View style={styles.buttonRow}>
-              <TouchableOpacity onPress={() => setStep(1)}
+              <TouchableOpacity onPress={() => setStep(2)}
                 style={[styles.backStepButton, { borderColor: colors.border }]}>
                 <Text style={[Typography.buttonSm, { color: colors.textSecondary }]}>Back</Text>
               </TouchableOpacity>
@@ -227,7 +269,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   stepLine: {
-    width: 60,
+    width: 30,
     height: 2,
     marginHorizontal: Spacing.sm,
   },

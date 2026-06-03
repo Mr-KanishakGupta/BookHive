@@ -1,58 +1,111 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, Image, StyleSheet, StatusBar, Alert } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, FlatList, TouchableOpacity, TextInput, Image, StyleSheet, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { Menu, Search, CheckCircle, AlertCircle, DollarSign, RotateCcw } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
-import { BORROW_RECORDS, BOOKS, STUDENTS } from '../../services/mockData';
+import { returnBook } from '../../services/borrowService';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 const ReturnsScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const activeRecords = BORROW_RECORDS.filter(br => br.status === 'active' || br.status === 'overdue');
-  const overdueCount = activeRecords.filter(br => br.status === 'overdue').length;
-  const activeCount = activeRecords.filter(br => br.status === 'active').length;
-  const totalFines = activeRecords.reduce((sum, br) => sum + br.fine, 0);
+  const [activeRecords, setActiveRecords] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchActiveBorrows = async () => {
+    setIsLoading(true);
+    try {
+      const q = query(
+        collection(db, 'borrow_records'),
+        where('status', 'in', ['BORROWED', 'OVERDUE'])
+      );
+      const snap = await getDocs(q);
+      
+      const records = [];
+      for (const docSnap of snap.docs) {
+        const d = docSnap.data();
+        records.push({
+          id: docSnap.id,
+          ...d,
+          dueDate: d.dueDate?.toDate?.()?.toISOString(),
+          borrowDate: d.borrowDate?.toDate?.()?.toISOString(),
+          // Note: In a real app we'd fetch book/student details properly or use populated views
+          book: { title: 'Book ' + d.bookId, coverUrl: 'https://via.placeholder.com/150' },
+          student: { name: d.studentId },
+        });
+      }
+      setActiveRecords(records);
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to load active borrows');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', fetchActiveBorrows);
+    return unsubscribe;
+  }, [navigation]);
+
+  const handleReturn = async (item) => {
+    try {
+      const res = await returnBook(item.id);
+      if (res.fine > 0) {
+        Alert.alert('Returned', `Book returned. Student owes a fine of ₹${res.fine}.`);
+      } else {
+        Alert.alert('Returned', `Book returned successfully.`);
+      }
+      fetchActiveBorrows();
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
+  const overdueCount = activeRecords.filter(br => br.status === 'OVERDUE').length;
+  const activeCount = activeRecords.filter(br => br.status === 'BORROWED').length;
+  const totalFines = activeRecords.reduce((sum, br) => sum + (br.fine || 0), 0);
 
   const filteredRecords = useMemo(() => {
     if (!searchQuery.trim()) return activeRecords;
     const q = searchQuery.toLowerCase();
     return activeRecords.filter(br => {
-      const book = BOOKS.find(b => b.id === br.bookId);
-      return book?.title.toLowerCase().includes(q);
+      return br.book?.title?.toLowerCase().includes(q) || br.studentId?.toLowerCase().includes(q);
     });
-  }, [searchQuery]);
+  }, [searchQuery, activeRecords]);
 
   const renderReturn = ({ item }) => {
-    const book = BOOKS.find(b => b.id === item.bookId);
-    const student = STUDENTS.find(s => s.id === item.studentId);
-    const isOverdue = item.status === 'overdue';
+    const book = item.book;
+    const student = item.student;
+    const isOverdue = item.status === 'OVERDUE';
     return (
       <View style={s.card}>
         <Image source={{ uri: book?.coverUrl }} style={s.cover} />
         <View style={{ flex: 1, marginLeft: 14 }}>
           <Text style={s.bookTitle}>{book?.title}</Text>
-          <Text style={s.author}>{book?.author}</Text>
+          <Text style={s.author}>{book?.author || 'Unknown'}</Text>
           <Text style={s.borrower}>Borrower: {student?.name}</Text>
           <View style={s.dateRow}>
             <View>
               <Text style={s.dateLabel}>Borrow Date</Text>
-              <Text style={s.dateVal}>{item.borrowDate}</Text>
+              <Text style={s.dateVal}>{item.borrowDate ? new Date(item.borrowDate).toLocaleDateString() : 'N/A'}</Text>
             </View>
             <View style={{ marginLeft: 24 }}>
               <Text style={s.dateLabel}>Due Date</Text>
-              <Text style={[s.dateVal, isOverdue && { color: AdminColors.red }]}>{item.dueDate}</Text>
+              <Text style={[s.dateVal, isOverdue && { color: AdminColors.red }]}>{item.dueDate ? new Date(item.dueDate).toLocaleDateString() : 'N/A'}</Text>
             </View>
           </View>
           <View style={s.statusRow}>
             <View style={[s.statusTag, { backgroundColor: isOverdue ? AdminColors.redLight : AdminColors.greenLight }]}>
               <Text style={[s.statusText, { color: isOverdue ? AdminColors.red : AdminColors.green }]}>{isOverdue ? 'Overdue' : 'On Time'}</Text>
             </View>
-            {item.fine > 0 && (
+            {(item.fine || 0) > 0 && (
               <View style={[s.statusTag, { backgroundColor: AdminColors.redLight, marginLeft: 6 }]}>
                 <Text style={[s.statusText, { color: AdminColors.red }]}>Fine: ₹{item.fine}</Text>
               </View>
             )}
           </View>
         </View>
-        <TouchableOpacity style={s.returnBtn} onPress={() => Alert.alert('Returned', `${book?.title} returned`)}>
+        <TouchableOpacity style={s.returnBtn} onPress={() => handleReturn(item)}>
           <CheckCircle size={16} color="#fff" /><Text style={s.returnText}>Process Return</Text>
         </TouchableOpacity>
       </View>
@@ -71,12 +124,12 @@ const ReturnsScreen = ({ navigation }) => {
       </View>
       <View style={s.searchBox}>
         <Search size={18} color={AdminColors.textMuted} />
-        <TextInput style={s.searchIn} placeholder="Search by book title..." placeholderTextColor={AdminColors.textMuted} value={searchQuery} onChangeText={setSearchQuery} />
+        <TextInput style={s.searchIn} placeholder="Search by book title or student..." placeholderTextColor={AdminColors.textMuted} value={searchQuery} onChangeText={setSearchQuery} />
       </View>
       <View style={s.sumRow}>
         {[{ icon: CheckCircle, v: activeCount, l: 'Active', ic: AdminColors.green, bg: AdminColors.greenLight },
           { icon: AlertCircle, v: overdueCount, l: 'Overdue', ic: AdminColors.red, bg: AdminColors.redLight },
-          { icon: DollarSign, v: totalFines, l: 'Total Fines', ic: AdminColors.red, bg: AdminColors.redLight },
+          { icon: DollarSign, v: `₹${totalFines}`, l: 'Total Fines', ic: AdminColors.red, bg: AdminColors.redLight },
         ].map((c, i) => (
           <View key={i} style={s.sumCard}>
             <View style={[s.sumIcon, { backgroundColor: c.bg }]}><c.icon size={16} color={c.ic} /></View>
@@ -84,10 +137,17 @@ const ReturnsScreen = ({ navigation }) => {
           </View>
         ))}
       </View>
-      <FlatList data={filteredRecords} keyExtractor={i => i.id} renderItem={renderReturn}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}
-        ListEmptyComponent={<View style={s.empty}><RotateCcw size={48} color={AdminColors.textMuted} /><Text style={s.emptyT}>No active borrows</Text></View>}
-      />
+      
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={AdminColors.navy} />
+        </View>
+      ) : (
+        <FlatList data={filteredRecords} keyExtractor={i => i.id} renderItem={renderReturn}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}
+          ListEmptyComponent={<View style={s.empty}><RotateCcw size={48} color={AdminColors.textMuted} /><Text style={s.emptyT}>No active borrows</Text></View>}
+        />
+      )}
     </View>
   );
 };
