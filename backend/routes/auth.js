@@ -101,4 +101,49 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
+router.post('/add-student', async (req, res) => {
+  const { libraryCardNumber, email, usn, name } = req.body;
+  if (!libraryCardNumber || !email) {
+    return res.status(400).json({ error: "Missing library card number or email." });
+  }
+
+  try {
+    const db = admin.firestore();
+    const studentDocRef = db.collection("students").doc(libraryCardNumber);
+    const existing = await studentDocRef.get();
+    
+    if (existing.exists) {
+      return res.status(400).json({ error: "Student with this library card ID already exists." });
+    }
+
+    const studentData = {
+      name: name || libraryCardNumber,
+      library_card_id: libraryCardNumber,
+      college_id: email,
+      usn: usn || "",
+      password: null,
+      isActive: false,
+      fineAmount: 0,
+      isBlacklisted: false,
+      createdAt: new Date().toISOString()
+    };
+
+    await studentDocRef.set(studentData);
+
+    const mailOptions = {
+      from: `"BookHive Library" <${process.env.GMAIL_EMAIL || 'projectpurpose695@gmail.com'}>`,
+      to: email,
+      subject: "Welcome to BookHive - Your Library Card is Ready",
+      text: `Hello,\n\nYour library card has been generated!\n\nLibrary Card ID: ${libraryCardNumber}\n\nYou can now download the BookHive app and click on "Create Account" using your library card ID to set your password and start borrowing books.\n\nRegards,\nBookHive Admin`,
+    };
+
+    await transporter.sendMail(mailOptions);
+    return res.json({ success: true, message: "Student added and welcome email sent." });
+
+  } catch (error) {
+    console.error("Add Student Error:", error);
+    return res.status(500).json({ error: "Internal server error." });
+  }
+});
+
 module.exports = router;
