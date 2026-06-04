@@ -1,8 +1,10 @@
 const express = require('express');
 const admin = require('firebase-admin');
-const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const router = express.Router();
+
+// Resend email service
+const { sendOTPEmail } = require('../services/emailService');
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -52,8 +54,14 @@ router.post('/request-otp', async (req, res) => {
       text: `Your OTP for BookHive registration is: ${otp}. It will expire in 10 minutes.`,
     };
 
-    // await transporter.sendMail(mailOptions);
-    return res.json({ success: true, message: `Render Free Tier blocks emails. Your OTP is: ${otp}` });
+    // Send OTP via Resend email
+    const emailSent = await sendOTPEmail(email, otp);
+    if (!emailSent) {
+      console.error('❌ Failed to send OTP email to', email);
+    } else {
+      console.log('✅ OTP email sent to', email);
+    }
+    return res.json({ success: true, message: 'OTP sent successfully' });
 
   } catch (error) {
     console.error("OTP Error:", error);
