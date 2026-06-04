@@ -22,6 +22,8 @@ import RequestsScreen from '../screens/admin/RequestsScreen';
 import ReturnsScreen from '../screens/admin/ReturnsScreen';
 import FinesScreen from '../screens/admin/FinesScreen';
 import ReportsScreen from '../screens/admin/ReportsScreen';
+import AddBookScreen from '../screens/admin/AddBookScreen';
+import EditBookScreen from '../screens/admin/EditBookScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -122,6 +124,23 @@ const AdminStack = () => {
           component={item.component}
         />
       ))}
+      {/* Hidden screen — not shown in drawer sidebar */}
+      <Drawer.Screen
+        name="AddBook"
+        component={AddBookScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
+          swipeEnabled: false,
+        }}
+      />
+      <Drawer.Screen
+        name="EditBook"
+        component={EditBookScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
+          swipeEnabled: false,
+        }}
+      />
     </Drawer.Navigator>
   );
 };

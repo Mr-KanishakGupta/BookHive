@@ -13,6 +13,7 @@ import { DEPARTMENTS } from '../../utils/constants'; // assuming we have it ther
 
 const DEPARTMENTS_LIST = [
   'All Departments',
+  'Independent',
   'Computer Science',
   'Electronics & Communication',
   'Mechanical Engineering',
@@ -116,7 +117,7 @@ const ManageBooksScreen = ({ navigation }) => {
           <Text style={styles.isbnText}>{item.bookCode}</Text>
         </View>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Edit', `Edit ${item.title}`)}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('EditBook', { bookCode: item.bookCode })}>
             <Edit3 size={16} color={AdminColors.blue} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => handleDelete(item.bookCode)}>
@@ -139,7 +140,7 @@ const ManageBooksScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Manage Books</Text>
           <Text style={styles.headerSub}>Add, edit, or remove books from the library</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => Alert.alert('Add Book', 'Add new book form')}>
+        <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('AddBook')}>
           <Plus size={18} color={AdminColors.white} />
           <Text style={styles.addBtnText}>Add New Book</Text>
         </TouchableOpacity>

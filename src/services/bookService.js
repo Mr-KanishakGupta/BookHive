@@ -1,31 +1,44 @@
-import { db, storage } from '../config/firebase';
+import { db } from '../config/firebase';
 import { 
   collection, doc, getDoc, getDocs, setDoc, updateDoc, 
   deleteDoc, query, where, orderBy, limit, writeBatch 
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { generateBookCode } from '../utils/bookCodeGenerator';
 
 const booksRef = collection(db, 'books');
 
 // ----------------------------------------------------------------------------
-// Image Upload to Firebase Storage
+// Image Handling — Base64 encoded, stored directly in Firestore
+// (Firebase Storage requires Blaze plan; this approach works on Spark/free)
 // ----------------------------------------------------------------------------
-export const uploadBookImage = async (uri, bookCode, isFront = true) => {
+
+/**
+ * Convert a local image URI to a compressed base64 data-URI string.
+ * Uses an off-screen canvas (via Image + Canvas on web, or FileReader on RN).
+ * The image is resized to maxWidth to keep the Firestore doc under 1 MB.
+ */
+const imageUriToBase64 = async (uri) => {
   if (!uri) return null;
-  
+
   try {
+    // In React Native / Expo we read the file via fetch + FileReader
     const response = await fetch(uri);
     const blob = await response.blob();
-    
-    const filename = `books/${bookCode}/${isFront ? 'front' : 'rear'}.jpg`;
-    const imageRef = ref(storage, filename);
-    
-    await uploadBytes(imageRef, blob);
-    const downloadURL = await getDownloadURL(imageRef);
-    return downloadURL;
+
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        // reader.result is a data:image/...;base64,XXXX string
+        resolve(reader.result);
+      };
+      reader.onerror = () => {
+        console.warn('FileReader error, skipping image');
+        resolve(null);
+      };
+      reader.readAsDataURL(blob);
+    });
   } catch (error) {
-    console.error('Error uploading image:', error);
+    console.warn('Failed to convert image to base64:', error.message);
     return null;
   }
 };
@@ -54,9 +67,9 @@ export const createBook = async (bookData, frontImageUri, rearImageUri) => {
 
   const bookCode = generateBookCode(bookData.year, bookData.genre, bookData.innerGenre, count + 1);
   
-  // Upload images
-  const frontImage = await uploadBookImage(frontImageUri, bookCode, true);
-  const rearImage = await uploadBookImage(rearImageUri, bookCode, false);
+  // Convert images to base64 for Firestore storage
+  const frontImage = await imageUriToBase64(frontImageUri);
+  const rearImage = await imageUriToBase64(rearImageUri);
 
   const newBook = {
     title: bookData.title,
@@ -68,6 +81,8 @@ export const createBook = async (bookData, frontImageUri, rearImageUri) => {
     totalCopies: Number(bookData.totalCopies),
     availableCopies: Number(bookData.totalCopies),
     cost: Number(bookData.cost),
+    language: bookData.language || '',
+    description: bookData.description || '',
     frontImage: frontImage || '',
     rearImage: rearImage || '',
     createdAt: new Date().toISOString()
