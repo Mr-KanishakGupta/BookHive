@@ -52,8 +52,8 @@ router.post('/request-otp', async (req, res) => {
       text: `Your OTP for BookHive registration is: ${otp}. It will expire in 10 minutes.`,
     };
 
-    await transporter.sendMail(mailOptions);
-    return res.json({ success: true, message: "OTP sent to your college email." });
+    // await transporter.sendMail(mailOptions);
+    return res.json({ success: true, message: `Render Free Tier blocks emails. Your OTP is: ${otp}` });
 
   } catch (error) {
     console.error("OTP Error:", error);
@@ -137,8 +137,8 @@ router.post('/add-student', async (req, res) => {
       text: `Hello,\n\nYour library card has been generated!\n\nLibrary Card ID: ${libraryCardNumber}\n\nYou can now download the BookHive app and click on "Create Account" using your library card ID to set your password and start borrowing books.\n\nRegards,\nBookHive Admin`,
     };
 
-    await transporter.sendMail(mailOptions);
-    return res.json({ success: true, message: "Student added and welcome email sent." });
+    // await transporter.sendMail(mailOptions);
+    return res.json({ success: true, message: "Student added successfully (Email skipped due to Render Free Tier SMTP block)." });
 
   } catch (error) {
     console.error("Add Student Error:", error);
