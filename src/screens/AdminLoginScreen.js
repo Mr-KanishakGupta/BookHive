@@ -11,18 +11,17 @@ import { Typography, BorderRadius, Spacing } from '../theme/typography';
 const AdminLoginScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const { adminLogin, isLoading, clearError } = useAuth();
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!password.trim()) {
+      Alert.alert('Error', 'Please enter the admin password');
       return;
     }
     try {
       clearError();
-      await adminLogin(email.trim(), password);
+      await adminLogin(password);
     } catch (e) {
       Alert.alert('Login Failed', e.message);
     }
@@ -51,24 +50,11 @@ const AdminLoginScreen = ({ navigation }) => {
 
         <View style={styles.form}>
           <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-            <Ionicons name="mail-outline" size={20} color={colors.textMuted} />
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Admin email"
-              placeholderTextColor={colors.textMuted}
-              style={[Typography.body, styles.input, { color: colors.text }]}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View style={[styles.inputWrapper, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
             <TextInput
               value={password}
               onChangeText={setPassword}
-              placeholder="Password"
+              placeholder="Enter admin password"
               placeholderTextColor={colors.textMuted}
               style={[Typography.body, styles.input, { color: colors.text }]}
               secureTextEntry={!showPassword}
@@ -89,13 +75,6 @@ const AdminLoginScreen = ({ navigation }) => {
               <Text style={[Typography.button, { color: '#fff' }]}>Sign In as Admin</Text>
             )}
           </TouchableOpacity>
-        </View>
-
-        <View style={[styles.demoHint, { backgroundColor: colors.infoLight, borderColor: colors.info }]}>
-          <Ionicons name="information-circle" size={16} color={colors.info} />
-          <Text style={[Typography.caption, { color: colors.info, marginLeft: 6, flex: 1 }]}>
-            Demo: admin@bmsce.ac.in / admin123
-          </Text>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -136,15 +115,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 8,
     elevation: 4,
-  },
-  demoHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: BorderRadius.sm,
-    borderWidth: 1,
-    marginTop: Spacing.xxl,
-    alignSelf: 'center',
   },
 });
 

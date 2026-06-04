@@ -131,7 +131,6 @@ const ManageBooksScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={AdminColors.bgGrey} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.menuBtn}>
           <Menu size={24} color={AdminColors.navy} />
@@ -146,7 +145,6 @@ const ManageBooksScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Search + Filter */}
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
           <Search size={18} color={AdminColors.textMuted} />
@@ -171,7 +169,6 @@ const ManageBooksScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Dept filter dropdown */}
       {showDeptFilter && (
         <View style={styles.dropdown}>
           {DEPARTMENTS_LIST.map(dept => (

@@ -42,7 +42,6 @@ const CustomDrawerContent = ({ state, navigation }) => {
 
   return (
     <SafeAreaView style={styles.drawerContainer}>
-      {/* Profile Header */}
       <View style={styles.drawerHeader}>
         <Image 
           source={{ uri: 'https://i.pravatar.cc/150?img=11' }} 
@@ -54,7 +53,6 @@ const CustomDrawerContent = ({ state, navigation }) => {
         </View>
       </View>
 
-      {/* Menu Items */}
       <ScrollView style={styles.drawerMenu} showsVerticalScrollIndicator={false}>
         {DRAWER_ITEMS.map((item) => {
           const isActive = activeRoute === item.name;
@@ -85,7 +83,6 @@ const CustomDrawerContent = ({ state, navigation }) => {
         })}
       </ScrollView>
 
-      {/* Footer */}
       <View style={styles.drawerFooter}>
         <TouchableOpacity style={styles.footerButton} activeOpacity={0.7}>
           <Settings size={20} color={AdminColors.navy} />

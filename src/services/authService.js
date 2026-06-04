@@ -9,34 +9,24 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
 
 // Use local IP for emulator testing, replace with Render URL later
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000/api' : 'http://localhost:5000/api';
+const API_URL = "https://bookhive-31uu.onrender.com/api";
 
 // ----------------------------------------------------------------------------
-// Admin Login
+// Admin Login (Password-only, no Firebase Auth needed)
 // ----------------------------------------------------------------------------
-export const adminLogin = async (email, password) => {
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const user = userCredential.user;
+const ADMIN_PASSWORD = '@#$_&-+()/';
 
-    // Check if user is an admin
-    const adminDoc = await getDoc(doc(db, 'admins', user.uid));
-    
-    // For demo purposes, we can fallback to checking if email is admin@bmsce.ac.in
-    if (!adminDoc.exists() && email !== 'admin@bmsce.ac.in') {
-      await signOut(auth);
-      throw new Error('User is not an admin.');
-    }
-
-    return {
-      uid: user.uid,
-      email: user.email,
-      role: 'admin',
-      name: adminDoc.exists() ? adminDoc.data().name : 'Library Admin',
-    };
-  } catch (error) {
-    throw new Error(error.message || 'Invalid admin credentials');
+export const adminLogin = async (password) => {
+  if (password !== ADMIN_PASSWORD) {
+    throw new Error('Incorrect admin password.');
   }
+
+  return {
+    uid: 'admin-local',
+    email: 'admin@bookhive.local',
+    role: 'admin',
+    name: 'Library Admin',
+  };
 };
 
 // ----------------------------------------------------------------------------

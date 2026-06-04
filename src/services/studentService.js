@@ -1,34 +1,25 @@
 import { db } from '../config/firebase';
-import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, updateDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
 
 // Collection ref
 const studentsRef = collection(db, 'students');
 
 /**
- * Admin creates a new student
- * Workflow A
+ * Admin creates a new student (Calls backend to send email)
  */
-export const createStudent = async (library_card_id, college_id, usn) => {
-  const studentDoc = doc(studentsRef, library_card_id);
+export const createStudent = async (libraryCardNumber, email, usn, name) => {
+  const API_URL = "https://bookhive-31uu.onrender.com/api";
   
-  const existing = await getDoc(studentDoc);
-  if (existing.exists()) {
-    throw new Error('Student with this library card ID already exists.');
-  }
-
-  const studentData = {
-    library_card_id,
-    college_id,
-    usn,
-    password: null,
-    isActive: false,
-    fineAmount: 0,
-    isBlacklisted: false,
-    createdAt: new Date().toISOString()
-  };
-
-  await setDoc(studentDoc, studentData);
-  return studentData;
+  const response = await fetch(`${API_URL}/auth/add-student`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ libraryCardNumber, email, usn, name })
+  });
+  
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Failed to add student');
+  
+  return result;
 };
 
 /**
@@ -81,4 +72,12 @@ export const getBlacklistedStudents = async () => {
   const q = query(studentsRef, where('isBlacklisted', '==', true));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+/**
+ * Delete a student (Admin)
+ */
+export const deleteStudent = async (library_card_id) => {
+  const studentDoc = doc(studentsRef, library_card_id);
+  await deleteDoc(studentDoc);
 };

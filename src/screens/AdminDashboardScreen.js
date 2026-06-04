@@ -94,7 +94,6 @@ const AdminDashboardScreen = ({ navigation }) => {
       <View style={[styles.background, { backgroundColor: AdminColors.adminBg }]} />
       
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => navigation.openDrawer()}
@@ -104,10 +103,9 @@ const AdminDashboardScreen = ({ navigation }) => {
             <Menu size={24} color={AdminColors.adminText} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Admin Portal</Text>
-          <View style={{ width: 44 }} /> {/* Balance the flex header */}
+          <View style={{ width: 44 }} />
         </View>
 
-        {/* Stats Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Stats Cards</Text>
           <View style={styles.statsGrid}>
@@ -126,7 +124,6 @@ const AdminDashboardScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Pending Tasks Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Pending Tasks</Text>
           {pendingTasks.length === 0 ? (

@@ -30,10 +30,10 @@ const SignupScreen = ({ navigation }) => {
       setStudentInfo(info);
       
       // Request OTP
-      await requestOTP(cardNumber.trim());
+      const result = await requestOTP(cardNumber.trim());
       
       setStep(2);
-      Alert.alert('Success', 'OTP sent to your college email.');
+      Alert.alert('Success', result.message || 'OTP sent to your college email.');
     } catch (e) {
       Alert.alert('Error', e.message);
     }

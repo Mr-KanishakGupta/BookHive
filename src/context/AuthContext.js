@@ -15,34 +15,19 @@ export const AuthProvider = ({ children }) => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         try {
-          // Check if admin
-          const adminDoc = await getDoc(doc(db, 'admins', firebaseUser.uid));
-          if (adminDoc.exists() || firebaseUser.email === 'admin@bmsce.ac.in') {
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              role: 'admin',
-              name: adminDoc.exists() ? adminDoc.data().name : 'Library Admin',
-            });
+          // Admin no longer uses Firebase Auth, so any authenticated user is a student.
+          // Try to find them by email in students collection.
+          const { collection, query, where, getDocs } = require('firebase/firestore');
+          const q = query(collection(db, 'students'), where('college_id', '==', firebaseUser.email));
+          const querySnapshot = await getDocs(q);
+          if (!querySnapshot.empty) {
+              setUser({
+                  ...querySnapshot.docs[0].data(),
+                  role: 'student',
+                  uid: firebaseUser.uid
+              });
           } else {
-            // Must be student, but we need library_card_id etc.
-            // Since we stored authUid on student doc during signup, we need a way to look them up.
-            // Or we can just use the login flow to set user state and ignore onAuthStateChanged for students 
-            // if we don't have a reverse lookup.
-            // Let's assume login() sets the context. This listener is mostly for re-auth on app launch.
-            // For now, if student, we'll try to find them by email
-            const { collection, query, where, getDocs } = require('firebase/firestore');
-            const q = query(collection(db, 'students'), where('college_id', '==', firebaseUser.email));
-            const querySnapshot = await getDocs(q);
-            if (!querySnapshot.empty) {
-                setUser({
-                    ...querySnapshot.docs[0].data(),
-                    role: 'student',
-                    uid: firebaseUser.uid
-                });
-            } else {
-                setUser(null); // Unknown user
-            }
+              setUser(null);
           }
         } catch (e) {
           console.error('Error fetching user details:', e);
@@ -72,11 +57,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const adminLogin = async (email, password) => {
+  const adminLogin = async (password) => {
     setIsLoading(true);
     setError(null);
     try {
-      const adminData = await authService.adminLogin(email, password);
+      const adminData = await authService.adminLogin(password);
       setUser(adminData);
       return adminData;
     } catch (e) {
