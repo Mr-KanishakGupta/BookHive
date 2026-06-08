@@ -21,8 +21,13 @@ export const AuthProvider = ({ children }) => {
           const q = query(collection(db, 'students'), where('college_id', '==', firebaseUser.email));
           const querySnapshot = await getDocs(q);
           if (!querySnapshot.empty) {
+              const docSnap = querySnapshot.docs[0];
+              const data = docSnap.data();
               setUser({
-                  ...querySnapshot.docs[0].data(),
+                  ...data,
+                  id: docSnap.id,
+                  libraryCardNumber: docSnap.id,
+                  email: data.college_id,
                   role: 'student',
                   uid: firebaseUser.uid
               });

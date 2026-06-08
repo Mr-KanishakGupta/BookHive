@@ -80,6 +80,8 @@ export const BooksProvider = ({ children }) => {
   }, []);
 
   const requestIssue = useCallback(async (studentId, bookId) => {
+    if (!studentId) throw new Error('Student ID is missing. Please log out and log back in.');
+    if (!bookId) throw new Error('Book ID is missing.');
     return await borrowService.requestBorrow(studentId, bookId);
   }, []);
 
@@ -89,9 +91,10 @@ export const BooksProvider = ({ children }) => {
     throw new Error('Advance reservations are currently disabled in the new system.');
   }, []);
 
-  const extendBorrow = useCallback(async (borrowRecordId) => {
-    throw new Error('Extensions are to be implemented.');
-    // return await borrowService.extendBorrow(borrowRecordId);
+  const extendBorrow = useCallback(async (borrowRecordId, studentId, reason = '') => {
+    if (!borrowRecordId) throw new Error('Borrow record ID is missing.');
+    if (!studentId) throw new Error('Student ID is missing. Please log out and log back in.');
+    return await borrowService.requestExtension(borrowRecordId, studentId, reason);
   }, []);
 
   return (

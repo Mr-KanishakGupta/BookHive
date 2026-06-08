@@ -36,9 +36,11 @@ export const login = async (identifier, password) => {
   try {
     let email = identifier;
     let studentData = null;
+    let libraryCardId = null;
 
     // If identifier is not an email (e.g., library_card_id), lookup the email
     if (!identifier.includes('@')) {
+      libraryCardId = identifier;
       const studentDoc = await getDoc(doc(db, 'students', identifier));
       if (!studentDoc.exists()) {
         throw new Error('Invalid library card number.');
@@ -52,6 +54,7 @@ export const login = async (identifier, password) => {
       if (querySnapshot.empty) {
         throw new Error('Student not found.');
       }
+      libraryCardId = querySnapshot.docs[0].id;
       studentData = querySnapshot.docs[0].data();
     }
 
@@ -68,6 +71,9 @@ export const login = async (identifier, password) => {
     
     return {
       ...studentData,
+      id: libraryCardId,
+      libraryCardNumber: libraryCardId,
+      email: studentData.college_id,
       role: 'student',
       uid: userCredential.user.uid
     };

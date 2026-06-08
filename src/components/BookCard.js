@@ -1,10 +1,24 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { Typography, BorderRadius, Spacing } from '../theme/typography';
 
+const BookCoverImage = ({ uri, style }) => {
+  const { colors } = useTheme();
+  if (uri) {
+    return <Image source={{ uri }} style={style} />;
+  }
+  return (
+    <View style={[style, { backgroundColor: colors.border || '#e0e0e0', justifyContent: 'center', alignItems: 'center' }]}>  
+      <Ionicons name="book-outline" size={32} color={colors.textMuted || '#999'} />
+    </View>
+  );
+};
+
 const BookCard = ({ book, onPress, style, horizontal = false, isCurated = false }) => {
   const { colors } = useTheme();
+  const coverUri = book.frontImage || book.coverUrl || null;
 
   if (horizontal) {
     return (
@@ -13,7 +27,7 @@ const BookCard = ({ book, onPress, style, horizontal = false, isCurated = false 
         activeOpacity={0.7}
         style={[styles.horizontalCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }, style]}
       >
-        <Image source={{ uri: book.coverUrl }} style={styles.horizontalCover} />
+        <BookCoverImage uri={coverUri} style={styles.horizontalCover} />
         <View style={styles.horizontalInfo}>
           <Text style={[Typography.bodySmBold, { color: colors.text }]} numberOfLines={2}>
             {book.title}
@@ -43,7 +57,7 @@ const BookCard = ({ book, onPress, style, horizontal = false, isCurated = false 
       activeOpacity={0.7}
       style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder, shadowColor: colors.shadow }, style]}
     >
-      <Image source={{ uri: book.coverUrl }} style={styles.cover} />
+      <BookCoverImage uri={coverUri} style={styles.cover} />
       <View style={styles.info}>
         <Text style={[Typography.bodySmBold, { color: colors.text }]} numberOfLines={2}>
           {book.title}
@@ -147,3 +161,4 @@ const styles = StyleSheet.create({
 });
 
 export default BookCard;
+

@@ -9,7 +9,7 @@ import { Typography } from '../theme/typography';
 import HomeScreen from '../screens/HomeScreen';
 import SearchScreen from '../screens/SearchScreen';
 import MyBooksScreen from '../screens/MyBooksScreen';
-import RoomsScreen from '../screens/RoomsScreen';
+
 import ProfileScreen from '../screens/ProfileScreen';
 import BookDetailsScreen from '../screens/BookDetailsScreen';
 import BorrowHistoryScreen from '../screens/BorrowHistoryScreen';
@@ -43,11 +43,6 @@ const MyBooksStack = () => (
   </Stack.Navigator>
 );
 
-const RoomsStack = () => (
-  <Stack.Navigator screenOptions={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}>
-    <Stack.Screen name="RoomsMain" component={RoomsScreen} />
-  </Stack.Navigator>
-);
 
 const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}>
@@ -71,7 +66,6 @@ const StudentTabs = () => {
             case 'Home': iconName = focused ? 'home' : 'home-outline'; break;
             case 'Search': iconName = focused ? 'search' : 'search-outline'; break;
             case 'MyBooks': iconName = focused ? 'book' : 'book-outline'; break;
-            case 'Rooms': iconName = focused ? 'grid' : 'grid-outline'; break;
             case 'Profile': iconName = focused ? 'person' : 'person-outline'; break;
           }
           return <Ionicons name={iconName} size={22} color={color} />;
@@ -99,7 +93,7 @@ const StudentTabs = () => {
       <Tab.Screen name="Home" component={HomeStack} />
       <Tab.Screen name="Search" component={SearchStack} />
       <Tab.Screen name="MyBooks" component={MyBooksStack} options={{ tabBarLabel: 'My Books' }} />
-      <Tab.Screen name="Rooms" component={RoomsStack} />
+
       <Tab.Screen name="Profile" component={ProfileStack} />
     </Tab.Navigator>
   );

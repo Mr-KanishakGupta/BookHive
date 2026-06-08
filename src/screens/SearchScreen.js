@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, FlatList, Text, StyleSheet, StatusBar } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, FlatList, Text, StyleSheet, StatusBar, ActivityIndicator } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { useBooks } from '../context/BooksContext';
 import SearchBar from '../components/SearchBar';
@@ -14,15 +14,35 @@ const SearchScreen = ({ navigation }) => {
   const [query, setQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('all');
   const [activeDept, setActiveDept] = useState('all_dept');
-  const [hasSearched, setHasSearched] = useState(false);
+  const [initialBooks, setInitialBooks] = useState([]);
+  const [initialLoaded, setInitialLoaded] = useState(false);
+
+  // Load initial top 20 books when screen mounts
+  useEffect(() => {
+    const loadInitial = async () => {
+      try {
+        await loadBooks();
+      } catch (e) {
+        console.error('Error loading initial books:', e);
+      }
+    };
+    loadInitial();
+  }, []);
+
+  // When books are loaded, set initial books (top 20)
+  useEffect(() => {
+    if (books && books.length > 0 && !initialLoaded) {
+      setInitialBooks(books.slice(0, 20));
+      setInitialLoaded(true);
+    }
+  }, [books, initialLoaded]);
+
+  const hasQuery = query.trim().length > 0;
 
   const handleSearch = useCallback((text) => {
     setQuery(text);
     if (text.trim().length > 0) {
       searchBooksAction(text, activeFilter === 'all' ? undefined : activeFilter);
-      setHasSearched(true);
-    } else {
-      setHasSearched(false);
     }
   }, [activeFilter, searchBooksAction]);
 
@@ -41,12 +61,21 @@ const SearchScreen = ({ navigation }) => {
     navigation.navigate('BookDetails', { bookId: book.id, book });
   };
 
-  // Filter results by department if one is selected
-  const filteredResults = hasSearched
-    ? (activeDept === 'all_dept'
-        ? searchResults
-        : searchResults.filter(b => b.department === activeDept))
-    : [];
+  // Determine what to show:
+  // - If there's a search query, show filtered search results
+  // - If no query, show initial top 20 books (filtered by department if selected)
+  const getDisplayBooks = () => {
+    let results = hasQuery ? searchResults : initialBooks;
+
+    // Apply department filter
+    if (activeDept !== 'all_dept') {
+      results = results.filter(b => b.department === activeDept);
+    }
+
+    return results;
+  };
+
+  const displayBooks = getDisplayBooks();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -73,18 +102,34 @@ const SearchScreen = ({ navigation }) => {
       </View>
 
       {/* Results */}
-      {hasSearched ? (
-        <FlatList
-          data={filteredResults}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={{ paddingHorizontal: Spacing.lg }}>
-              <BookCard book={item} onPress={() => navigateToBook(item)} horizontal />
+      <FlatList
+        data={displayBooks}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <View style={{ paddingHorizontal: Spacing.lg }}>
+            <BookCard book={item} onPress={() => navigateToBook(item)} horizontal />
+          </View>
+        )}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: Spacing.md, paddingBottom: Spacing.xxxl }}
+        ListHeaderComponent={
+          !hasQuery && displayBooks.length > 0 ? (
+            <View style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.md }}>
+              <Text style={[Typography.bodySmBold, { color: colors.textMuted }]}>
+                {activeDept !== 'all_dept' ? 'Top Books in Department' : 'Top Books'}
+              </Text>
             </View>
-          )}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingTop: Spacing.md, paddingBottom: Spacing.xxxl }}
-          ListEmptyComponent={
+          ) : null
+        }
+        ListEmptyComponent={
+          isLoading ? (
+            <View style={styles.empty}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={[Typography.body, { color: colors.textMuted, marginTop: Spacing.lg }]}>
+                Loading books...
+              </Text>
+            </View>
+          ) : (
             <View style={styles.empty}>
               <Ionicons name="search-outline" size={48} color={colors.textMuted} />
               <Text style={[Typography.body, { color: colors.textMuted, marginTop: Spacing.lg }]}>
@@ -94,19 +139,9 @@ const SearchScreen = ({ navigation }) => {
                 Try different keywords or filters
               </Text>
             </View>
-          }
-        />
-      ) : (
-        <View style={styles.prompt}>
-          <Ionicons name="book-outline" size={64} color={colors.border} />
-          <Text style={[Typography.body, { color: colors.textMuted, marginTop: Spacing.lg, textAlign: 'center' }]}>
-            Search our collection of books
-          </Text>
-          <Text style={[Typography.bodySm, { color: colors.textMuted, marginTop: Spacing.sm, textAlign: 'center' }]}>
-            Find books by title, author, genre, or book code
-          </Text>
-        </View>
-      )}
+          )
+        }
+      />
     </View>
   );
 };
@@ -123,12 +158,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 80,
-  },
-  prompt: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.xxxl,
   },
 });
 

@@ -215,3 +215,120 @@ export const returnBook = async (borrowRecordId) => {
 
   return { success: true, fine: recordData.fine };
 };
+
+// ----------------------------------------------------------------------------
+// Extension Request Flow
+// ----------------------------------------------------------------------------
+const extensionRef = collection(db, 'extension_requests');
+
+/**
+ * Student requests a due-date extension for an active borrow.
+ */
+export const requestExtension = async (borrowRecordId, studentId, reason = '') => {
+  const recordDoc = await getDoc(doc(db, 'borrow_records', borrowRecordId));
+  if (!recordDoc.exists()) throw new Error('Borrow record not found');
+  const data = recordDoc.data();
+
+  if (data.status !== BORROW_STATUS.BORROWED && data.status !== BORROW_STATUS.OVERDUE) {
+    throw new Error('Only active borrows can request extension');
+  }
+
+  // Check for existing pending extension
+  const existingQ = query(
+    extensionRef,
+    where('borrowRecordId', '==', borrowRecordId),
+    where('status', '==', 'PENDING')
+  );
+  const existing = await getDocs(existingQ);
+  if (!existing.empty) throw new Error('An extension request is already pending.');
+
+  const extensionDoc = {
+    borrowRecordId,
+    studentId,
+    bookId: data.bookId,
+    currentDueDate: data.dueDate,
+    reason,
+    status: 'PENDING',
+    createdAt: serverTimestamp(),
+  };
+
+  const docRef = await addDoc(extensionRef, extensionDoc);
+  return { id: docRef.id, ...extensionDoc };
+};
+
+/**
+ * Admin fetches all pending extension requests (with student & book details).
+ */
+export const getPendingExtensions = async () => {
+  const q = query(extensionRef, where('status', '==', 'PENDING'));
+  const snapshot = await getDocs(q);
+
+  const requests = [];
+  for (const docSnapshot of snapshot.docs) {
+    const data = docSnapshot.data();
+    const studentDoc = await getDoc(doc(db, 'students', data.studentId));
+    const bookDoc = await getDoc(doc(db, 'books', data.bookId));
+    const borrowDoc = await getDoc(doc(db, 'borrow_records', data.borrowRecordId));
+
+    requests.push({
+      id: docSnapshot.id,
+      ...data,
+      student: studentDoc.exists() ? { id: studentDoc.id, ...studentDoc.data() } : null,
+      book: bookDoc.exists() ? { id: bookDoc.id, ...bookDoc.data() } : null,
+      borrowRecord: borrowDoc.exists() ? { id: borrowDoc.id, ...borrowDoc.data() } : null,
+      createdAt: data.createdAt?.toDate?.()?.toISOString(),
+      currentDueDate: data.currentDueDate?.toDate?.()?.toISOString(),
+    });
+  }
+  return requests;
+};
+
+/**
+ * Admin approves extension — extends the due date by EXTENSION_DAYS.
+ */
+export const approveExtension = async (extensionRequestId) => {
+  const EXTENSION_DAYS = 7;
+  const extDocRef = doc(db, 'extension_requests', extensionRequestId);
+  const extDoc = await getDoc(extDocRef);
+  if (!extDoc.exists()) throw new Error('Extension request not found');
+  const extData = extDoc.data();
+
+  const borrowDocRef = doc(db, 'borrow_records', extData.borrowRecordId);
+  const borrowDoc = await getDoc(borrowDocRef);
+  if (!borrowDoc.exists()) throw new Error('Borrow record not found');
+  const borrowData = borrowDoc.data();
+
+  // Calculate new due date
+  const currentDue = borrowData.dueDate?.toDate ? borrowData.dueDate.toDate() : new Date(borrowData.dueDate);
+  const newDueDate = new Date(currentDue);
+  newDueDate.setDate(newDueDate.getDate() + EXTENSION_DAYS);
+
+  // Update borrow_record
+  await updateDoc(borrowDocRef, {
+    dueDate: newDueDate,
+    status: BORROW_STATUS.BORROWED, // Reset from OVERDUE if applicable
+  });
+
+  // Update due_books entry
+  const dueQ = query(dueBooksRef, where('borrowRecordId', '==', extData.borrowRecordId));
+  const dueSnap = await getDocs(dueQ);
+  for (const dueDoc of dueSnap.docs) {
+    await updateDoc(doc(db, 'due_books', dueDoc.id), { dueDate: newDueDate });
+  }
+
+  // Mark extension request as APPROVED
+  await updateDoc(extDocRef, { status: 'APPROVED', approvedAt: serverTimestamp() });
+
+  return { success: true, newDueDate: newDueDate.toISOString() };
+};
+
+/**
+ * Admin rejects extension request.
+ */
+export const rejectExtension = async (extensionRequestId) => {
+  await updateDoc(doc(db, 'extension_requests', extensionRequestId), {
+    status: 'REJECTED',
+    rejectedAt: serverTimestamp(),
+  });
+  return { success: true };
+};

@@ -22,7 +22,7 @@ const BookDetailsScreen = ({ route, navigation }) => {
     setIssueLoading(true);
     try {
       const result = await requestIssue(user.id, book.id);
-      Alert.alert('Success', result.message);
+      Alert.alert('Success', result.message || 'Borrow request submitted successfully!');
     } catch (e) {
       Alert.alert('Error', e.message);
     } finally {
@@ -44,6 +44,13 @@ const BookDetailsScreen = ({ route, navigation }) => {
 
   const isAvailable = book.availableCopies > 0;
   const isAlreadyReserved = !!book.reservedBy;
+  const coverUri = book.frontImage || book.coverUrl || null;
+
+  // Build tag chips from actual book data
+  const tagChips = [];
+  if (book.genre) tagChips.push(book.genre);
+  if (book.innerGenre) tagChips.push(book.innerGenre);
+  if (book.department) tagChips.push(book.department);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -59,25 +66,36 @@ const BookDetailsScreen = ({ route, navigation }) => {
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: '#fff' }]}>Book Details</Text>
           <View style={styles.coverShadow}>
-            <Image source={{ uri: book.coverUrl }} style={styles.coverImage} />
+            {coverUri ? (
+              <Image source={{ uri: coverUri }} style={styles.coverImage} />
+            ) : (
+              <View style={[styles.coverImage, { backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }]}>
+                <Ionicons name="book-outline" size={60} color="rgba(255,255,255,0.5)" />
+              </View>
+            )}
           </View>
         </View>
 
         {/* Info Section */}
         <View style={[styles.infoSection, { backgroundColor: colors.background }]}>
+          {/* Title & Author */}
+          <Text style={[Typography.h2, { color: colors.text, textAlign: 'center', marginBottom: Spacing.xs }]}>
+            {book.title}
+          </Text>
+          <Text style={[Typography.body, { color: colors.textSecondary, textAlign: 'center', marginBottom: Spacing.lg }]}>
+            by {book.author}
+          </Text>
+
           {/* Tag Chips */}
-          <View style={styles.chipRow}>
-            {['Physics', book.innerGenre].map((tag) => (
-              <View key={tag} style={[styles.chip, { backgroundColor: colors.chipBg }]}>
-                <Text style={[Typography.chipLabel, { color: colors.chipText }]}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-          <View style={styles.chipRow}>
-            <View style={[styles.chip, { backgroundColor: colors.chipBg }]}>
-              <Text style={[Typography.chipLabel, { color: colors.chipText }]}>Faculty of Science</Text>
+          {tagChips.length > 0 && (
+            <View style={styles.chipRow}>
+              {tagChips.map((tag) => (
+                <View key={tag} style={[styles.chip, { backgroundColor: colors.chipBg }]}>
+                  <Text style={[Typography.chipLabel, { color: colors.chipText }]}>{tag}</Text>
+                </View>
+              ))}
             </View>
-          </View>
+          )}
 
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
@@ -104,7 +122,7 @@ const BookDetailsScreen = ({ route, navigation }) => {
             backgroundColor: isAvailable ? colors.successLight : colors.errorLight,
           }]}>
             <Text style={[Typography.bodySmBold, { color: isAvailable ? colors.success : colors.error, marginRight: Spacing.xs }]}>
-              {isAvailable ? 'Available' : 'Unavailable'}
+              {isAvailable ? `Available (${book.availableCopies}/${book.totalCopies})` : 'Unavailable'}
             </Text>
             <Ionicons 
               name={isAvailable ? "checkmark-circle" : "close-circle"} 
@@ -118,12 +136,8 @@ const BookDetailsScreen = ({ route, navigation }) => {
           {/* About Section */}
           <Text style={[Typography.h3, { color: colors.text, marginBottom: Spacing.sm }]}>About the Book</Text>
           <Text style={[Typography.body, { color: colors.text, lineHeight: 24 }]}>
-            {book.description}
+            {book.description || 'No description available for this book.'}
           </Text>
-          
-          <TouchableOpacity style={[styles.readMoreButton, { backgroundColor: colors.primary }]}>
-            <Text style={[Typography.buttonSm, { color: '#fff' }]}>Read More</Text>
-          </TouchableOpacity>
 
           <View style={[styles.divider, { backgroundColor: colors.divider, marginVertical: Spacing.xl }]} />
 
@@ -213,6 +227,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: Spacing.sm,
     marginBottom: Spacing.sm,
+    justifyContent: 'center',
   },
   chip: {
     paddingHorizontal: Spacing.md,
@@ -240,13 +255,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: BorderRadius.round,
     borderWidth: 1,
-  },
-  readMoreButton: {
-    alignSelf: 'center',
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.round,
-    marginTop: Spacing.lg,
   },
   actions: {
     flexDirection: 'row',

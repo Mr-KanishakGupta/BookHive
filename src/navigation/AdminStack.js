@@ -13,6 +13,9 @@ import { useAuth } from '../context/AuthContext';
 import { AdminColors } from '../theme/colors';
 import { Typography, Spacing, BorderRadius } from '../theme/typography';
 
+// Local assets
+const BMSU_LOGO = require('../BMSU _logo.png');
+
 // Screens
 import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 import ManageBooksScreen from '../screens/admin/ManageBooksScreen';
@@ -24,6 +27,7 @@ import FinesScreen from '../screens/admin/FinesScreen';
 import ReportsScreen from '../screens/admin/ReportsScreen';
 import AddBookScreen from '../screens/admin/AddBookScreen';
 import EditBookScreen from '../screens/admin/EditBookScreen';
+import AdminSettingsScreen from '../screens/admin/AdminSettingsScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -46,7 +50,7 @@ const CustomDrawerContent = ({ state, navigation }) => {
     <SafeAreaView style={styles.drawerContainer}>
       <View style={styles.drawerHeader}>
         <Image 
-          source={{ uri: 'https://i.pravatar.cc/150?img=11' }} 
+          source={BMSU_LOGO} 
           style={styles.profileImage} 
         />
         <View style={{ marginLeft: 16 }}>
@@ -86,7 +90,7 @@ const CustomDrawerContent = ({ state, navigation }) => {
       </ScrollView>
 
       <View style={styles.drawerFooter}>
-        <TouchableOpacity style={styles.footerButton} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.footerButton} activeOpacity={0.7} onPress={() => navigation.navigate('AdminSettings')}>
           <Settings size={20} color={AdminColors.navy} />
           <Text style={styles.footerText}>Settings</Text>
         </TouchableOpacity>
@@ -136,6 +140,14 @@ const AdminStack = () => {
       <Drawer.Screen
         name="EditBook"
         component={EditBookScreen}
+        options={{
+          drawerItemStyle: { display: 'none' },
+          swipeEnabled: false,
+        }}
+      />
+      <Drawer.Screen
+        name="AdminSettings"
+        component={AdminSettingsScreen}
         options={{
           drawerItemStyle: { display: 'none' },
           swipeEnabled: false,

@@ -44,8 +44,8 @@ const MyBooksScreen = ({ navigation }) => {
   const handleExtend = async (record) => {
     setExtendingId(record.id);
     try {
-      const result = await extendBorrow(record.id);
-      Alert.alert('Success', result.message);
+      await extendBorrow(record.id, user.id);
+      Alert.alert('Request Sent', 'Extension request submitted. The admin will review it shortly.');
       loadActiveBorrows(user.id);
     } catch (e) {
       Alert.alert('Cannot Extend', e.message);

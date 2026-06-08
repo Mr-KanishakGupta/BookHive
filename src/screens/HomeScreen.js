@@ -1,18 +1,14 @@
 import React, { useEffect, useCallback } from 'react';
 import {
   View, Text, FlatList, ScrollView, TouchableOpacity,
-  StyleSheet, RefreshControl, StatusBar, TextInput, ImageBackground,
+  StyleSheet, RefreshControl, StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useBooks } from '../context/BooksContext';
 import BookCard from '../components/BookCard';
-import ActiveBorrowCard from '../components/ActiveBorrowCard';
-import AnnouncementCard from '../components/AnnouncementCard';
 import { Typography, BorderRadius, Spacing } from '../theme/typography';
-const ANNOUNCEMENTS = [];
-const CURATED_BOOKS = [];
 
 const HomeScreen = ({ navigation }) => {
   const { colors } = useTheme();
@@ -38,38 +34,36 @@ const HomeScreen = ({ navigation }) => {
     return 'Good evening,';
   };
 
-  // We are assuming the first borrowed book is the 'Active Borrow' to show on home screen
-  // If the user has borrowed books, we find the book details
-  const activeBorrowDetails = user?.borrowedBooks?.length > 0 
-    ? [...recommended, ...recentlyAdded, ...popular, ...CURATED_BOOKS].find(b => b.id === user.borrowedBooks[0])
-    : null;
-
-  const renderSection = (title, data, icon, isCurated = false) => (
-    <View style={styles.section}>
-      <View style={styles.sectionHeader}>
-        <Text style={[Typography.h3, { color: colors.text }]}>{title}</Text>
+  const renderSection = (title, data, icon) => {
+    if (!data || data.length === 0) return null;
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          {icon ? <Ionicons name={icon} size={20} color={colors.primary} style={{ marginRight: Spacing.sm }} /> : null}
+          <Text style={[Typography.h3, { color: colors.text }]}>{title}</Text>
+        </View>
+        <FlatList
+          horizontal
+          data={data}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <BookCard book={item} onPress={() => navigateToBook(item)} />
+          )}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: Spacing.lg }}
+        />
       </View>
-      <FlatList
-        horizontal
-        data={data}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <BookCard book={item} onPress={() => navigateToBook(item)} isCurated={isCurated} />
-        )}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: Spacing.lg }}
-      />
-    </View>
-  );
+    );
+  };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.sectionBg }]}>
+    <View style={[styles.container, { backgroundColor: colors.sectionBg || colors.background }]}>
       <StatusBar barStyle="light-content" />
       <ScrollView
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section with Gradient/Background */}
+        {/* Header Section */}
         <View style={[styles.headerSection, { backgroundColor: colors.headerGradientStart }]}>
           <View style={styles.headerContent}>
             <Text style={[Typography.h1Large, { color: '#fff' }]}>{getGreeting()}</Text>
@@ -77,47 +71,61 @@ const HomeScreen = ({ navigation }) => {
             
             {/* Quick Search */}
             <TouchableOpacity 
-              style={[styles.searchContainer, { backgroundColor: colors.searchBarBg }]}
+              style={[styles.searchContainer, { backgroundColor: colors.searchBarBg || 'rgba(255,255,255,0.15)' }]}
               onPress={() => navigation.navigate('Search')}
               activeOpacity={0.9}
             >
-              <Ionicons name="search-outline" size={20} color={colors.textSecondary} />
-              <Text style={[Typography.body, { color: colors.textSecondary, marginLeft: Spacing.sm }]}>
+              <Ionicons name="search-outline" size={20} color="rgba(255,255,255,0.7)" />
+              <Text style={[Typography.body, { color: 'rgba(255,255,255,0.7)', marginLeft: Spacing.sm }]}>
                 Quick Search...
               </Text>
             </TouchableOpacity>
           </View>
-          
-          {/* Active Borrow overlaying the header slightly */}
-          <View style={styles.activeBorrowWrapper}>
-            {activeBorrowDetails ? (
-              <ActiveBorrowCard 
-                book={activeBorrowDetails} 
-                dueDate="Oct 24, 2024" 
-                daysRemaining={4} 
-                onRenew={() => alert('Renew requested')}
-              />
-            ) : null}
+
+          {/* Quick Stats */}
+          <View style={styles.quickStats}>
+            <View style={styles.quickStatItem}>
+              <Ionicons name="book" size={18} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.quickStatValue}>{user?.borrowedBooks?.length || 0}</Text>
+              <Text style={styles.quickStatLabel}>Borrowed</Text>
+            </View>
+            <View style={[styles.quickStatDivider]} />
+            <View style={styles.quickStatItem}>
+              <Ionicons name="layers" size={18} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.quickStatValue}>{5 - (user?.borrowedBooks?.length || 0)}</Text>
+              <Text style={styles.quickStatLabel}>Slots Left</Text>
+            </View>
+            <View style={[styles.quickStatDivider]} />
+            <View style={styles.quickStatItem}>
+              <Ionicons name="cash" size={18} color="rgba(255,255,255,0.9)" />
+              <Text style={styles.quickStatValue}>₹{user?.fines || 0}</Text>
+              <Text style={styles.quickStatLabel}>Fines</Text>
+            </View>
           </View>
         </View>
 
-        {/* Padding adjustment based on whether we have an active borrow */}
-        <View style={{ height: activeBorrowDetails ? Spacing.xl : Spacing.xxl }} />
+        {/* Spacing */}
+        <View style={{ height: Spacing.xl }} />
 
-        {/* Curated Section */}
-        {renderSection('Curated for Your Major', CURATED_BOOKS, '', true)}
+        {/* Book Sections — only renders if data exists */}
+        {renderSection('Recommended for You', recommended, 'sparkles')}
+        {renderSection('Recently Added', recentlyAdded, 'time-outline')}
+        {renderSection('Popular Books', popular, 'trending-up-outline')}
 
-        {/* Announcements Section */}
-        <View style={[styles.section, { paddingHorizontal: Spacing.lg }]}>
-          <Text style={[Typography.h3, { color: colors.text, marginBottom: Spacing.md }]}>Library Announcements</Text>
-          {ANNOUNCEMENTS.map((announcement) => (
-            <AnnouncementCard key={announcement.id} announcement={announcement} />
-          ))}
-        </View>
-
-        {/* Standard Sections */}
-        {renderSection('Recently Added', recentlyAdded, '')}
-        {renderSection('Popular Books', popular, '')}
+        {/* Empty state if no books at all */}
+        {(!recommended || recommended.length === 0) && 
+         (!recentlyAdded || recentlyAdded.length === 0) && 
+         (!popular || popular.length === 0) && !isLoading && (
+          <View style={styles.emptyState}>
+            <Ionicons name="library-outline" size={64} color={colors.border} />
+            <Text style={[Typography.body, { color: colors.textMuted, marginTop: Spacing.lg, textAlign: 'center' }]}>
+              No books available yet
+            </Text>
+            <Text style={[Typography.bodySm, { color: colors.textMuted, marginTop: Spacing.sm, textAlign: 'center' }]}>
+              Pull down to refresh
+            </Text>
+          </View>
+        )}
 
         <View style={{ height: Spacing.xxxl }} />
       </ScrollView>
@@ -131,7 +139,7 @@ const styles = StyleSheet.create({
   },
   headerSection: {
     paddingTop: 60,
-    paddingBottom: 40,
+    paddingBottom: Spacing.xxl,
     borderBottomLeftRadius: BorderRadius.xl,
     borderBottomRightRadius: BorderRadius.xl,
   },
@@ -145,11 +153,34 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: BorderRadius.round,
     marginTop: Spacing.xl,
-    marginBottom: Spacing.md,
   },
-  activeBorrowWrapper: {
-    marginBottom: -80, // Negative margin to overlap the section below
-    zIndex: 10,
+  quickStats: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: Spacing.xl,
+    paddingHorizontal: Spacing.xxl,
+  },
+  quickStatItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  quickStatValue: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  quickStatLabel: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  quickStatDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   section: {
     marginBottom: Spacing.xxl,
@@ -159,6 +190,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     marginBottom: Spacing.md,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+    paddingHorizontal: Spacing.xxxl,
   },
 });
 
