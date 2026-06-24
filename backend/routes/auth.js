@@ -1,30 +1,48 @@
 const express = require('express');
-const admin = require('firebase-admin');
-const { Resend } = require('resend');
 const crypto = require('crypto');
 const router = express.Router();
+const admin = require('firebase-admin');
+const { google } = require('googleapis');
 
-// Resend uses HTTP API — NOT blocked by Render free tier (unlike SMTP)
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.FROM_EMAIL || 'BookHive <onboarding@resend.dev>';
+const CLIENT_ID = process.env.GMAIL_CLIENT_ID;
+const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
+const REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
+const FROM_EMAIL = process.env.GMAIL_EMAIL; // e.g. "BookHive <your.email@gmail.com>"
+
+const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, 'https://developers.google.com/oauthplayground');
+oAuth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
+const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
 
 // ────────────────────────────────────────────────────────────────────────────
-// Helper: send email via Resend
+// Helper: send email via Gmail REST API (Bypasses Render SMTP Block)
 // ────────────────────────────────────────────────────────────────────────────
 const sendEmail = async (to, subject, text) => {
   try {
-    const { data, error } = await resend.emails.send({
-      from: FROM_EMAIL,
-      to: [to],
-      subject,
-      text,
+    const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
+    const messageParts = [
+      `From: ${FROM_EMAIL}`,
+      `To: ${to}`,
+      `Content-Type: text/plain; charset=utf-8`,
+      `MIME-Version: 1.0`,
+      `Subject: ${utf8Subject}`,
+      '',
+      text
+    ];
+    
+    const message = messageParts.join('\n');
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const res = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encodedMessage }
     });
-    if (error) {
-      console.error('Resend error:', error);
-      throw new Error(error.message || 'Email send failed');
-    }
-    console.log(`Email sent to ${to}:`, data?.id);
-    return data;
+    
+    console.log(`Email sent to ${to}:`, res.data.id);
+    return res.data;
   } catch (err) {
     console.error('Email send error:', err.message);
     throw err;
