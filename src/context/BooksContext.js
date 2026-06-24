@@ -14,6 +14,7 @@ export const BooksProvider = ({ children }) => {
   const [recommended, setRecommended] = useState([]);
   const [recentlyAdded, setRecentlyAdded] = useState([]);
   const [popular, setPopular] = useState([]);
+  const [advanceBookings, setAdvanceBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadBooks = useCallback(async () => {
@@ -86,9 +87,20 @@ export const BooksProvider = ({ children }) => {
   }, []);
 
   const advanceReserve = useCallback(async (studentId, bookId) => {
-    // advanceReserve was removed from spec, leaving as a placeholder or you can implement it later
-    // return await bookService.advanceReserve(studentId, bookId);
-    throw new Error('Advance reservations are currently disabled in the new system.');
+    if (!studentId) throw new Error('Student ID is missing. Please log out and log back in.');
+    if (!bookId) throw new Error('Book ID is missing.');
+    return await bookService.createAdvanceBooking(studentId, bookId);
+  }, []);
+
+  const loadAdvanceBookings = useCallback(async (studentId) => {
+    try {
+      const data = await bookService.getStudentAdvanceBookings(studentId);
+      setAdvanceBookings(data);
+    } catch (e) { /* ignore */ }
+  }, []);
+
+  const cancelAdvanceBookingAction = useCallback(async (bookingId, studentId) => {
+    return await bookService.cancelAdvanceBooking(bookingId, studentId);
   }, []);
 
   const extendBorrow = useCallback(async (borrowRecordId, studentId, reason = '') => {
@@ -107,6 +119,7 @@ export const BooksProvider = ({ children }) => {
       recommended,
       recentlyAdded,
       popular,
+      advanceBookings,
       isLoading,
       loadBooks,
       loadHomeData,
@@ -116,6 +129,8 @@ export const BooksProvider = ({ children }) => {
       loadFines,
       requestIssue,
       advanceReserve,
+      loadAdvanceBookings,
+      cancelAdvanceBookingAction,
       extendBorrow,
     }}>
       {children}

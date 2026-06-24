@@ -114,3 +114,67 @@ export const markFinePaid = async (dueBookId) => {
 
   return { success: true };
 };
+
+// ----------------------------------------------------------------------------
+// On-Demand Fine & Blacklist Recalculation
+// This mirrors the daily cron logic but runs from the client when needed.
+// Ensures the blacklist status is always current.
+// ----------------------------------------------------------------------------
+export const recalculateFinesNow = async () => {
+  const dueBooksSnap = await getDocs(dueBooksRef);
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let processed = 0;
+
+  for (const dueDocSnap of dueBooksSnap.docs) {
+    const dueBook = dueDocSnap.data();
+    const dueDate = dueBook.dueDate?.toDate ? dueBook.dueDate.toDate() : new Date(dueBook.dueDate);
+    const normalizedDue = new Date(dueDate);
+    normalizedDue.setHours(0, 0, 0, 0);
+
+    if (today > normalizedDue) {
+      const msPerDay = 1000 * 60 * 60 * 24;
+      const daysOverdue = Math.floor((today.getTime() - normalizedDue.getTime()) / msPerDay);
+
+      // Calculate fine
+      let bookCost = 0;
+      try {
+        const bookDoc = await getDoc(doc(db, 'books', dueBook.bookId));
+        bookCost = bookDoc.exists() ? (bookDoc.data().cost || bookDoc.data().price || 0) : 0;
+      } catch (e) { /* ignore */ }
+
+      const dailyPenalty = bookCost > 0 ? bookCost * 0.05 : 35;
+      const newFine = Math.round(daysOverdue * dailyPenalty);
+      const shouldBlacklist = daysOverdue >= 7;
+
+      // Update due_books record
+      await updateDoc(doc(db, 'due_books', dueDocSnap.id), { fine: newFine });
+
+      // Update borrow_records
+      if (dueBook.borrowRecordId) {
+        try {
+          await updateDoc(doc(db, 'borrow_records', dueBook.borrowRecordId), {
+            fine: newFine,
+            status: shouldBlacklist ? 'BLOCKED' : 'OVERDUE'
+          });
+        } catch (e) { /* record may not exist */ }
+      }
+
+      // Update student blacklist status
+      if (shouldBlacklist && dueBook.studentId) {
+        try {
+          await updateDoc(doc(db, 'students', dueBook.studentId), {
+            isBlacklisted: true
+          });
+        } catch (e) { /* ignore */ }
+      }
+
+      processed++;
+    }
+  }
+
+  return { processed };
+};
+

@@ -1,7 +1,8 @@
 import { db } from '../config/firebase';
 import { 
   collection, doc, getDoc, getDocs, setDoc, updateDoc, 
-  deleteDoc, query, where, orderBy, limit, writeBatch 
+  deleteDoc, query, where, orderBy, limit, writeBatch,
+  addDoc, serverTimestamp, Timestamp 
 } from 'firebase/firestore';
 import { generateBookCode } from '../utils/bookCodeGenerator';
 
@@ -163,3 +164,286 @@ export const getPopularBooks = async () => {
     (a.availableCopies / a.totalCopies) - (b.availableCopies / b.totalCopies)
   ).slice(0, 6);
 };
+
+// ----------------------------------------------------------------------------
+// Advance Booking — FCFS Queue System
+// ----------------------------------------------------------------------------
+import { ADVANCE_BOOKING_STATUS, ADVANCE_BOOKING_EXPIRY_HOURS } from '../utils/constants';
+
+const advanceBookingsRef = collection(db, 'advance_bookings');
+
+/**
+ * Student creates an advance booking for an unavailable book.
+ * Joins a first-come-first-serve queue.
+ */
+export const createAdvanceBooking = async (studentId, bookId) => {
+  // Check if student already has a WAITING or READY booking for this book
+  const existingQ = query(
+    advanceBookingsRef,
+    where('studentId', '==', studentId),
+    where('bookId', '==', bookId),
+    where('status', 'in', [ADVANCE_BOOKING_STATUS.WAITING, ADVANCE_BOOKING_STATUS.READY])
+  );
+  const existing = await getDocs(existingQ);
+  if (!existing.empty) {
+    throw new Error('You already have an advance booking for this book.');
+  }
+
+  // Check if student is blacklisted
+  const studentDoc = await getDoc(doc(db, 'students', studentId));
+  if (studentDoc.exists() && studentDoc.data().isBlacklisted) {
+    throw new Error('You are blacklisted. Please clear your dues first.');
+  }
+
+  // Get queue position (count of WAITING bookings for this book + 1)
+  const waitingQ = query(
+    advanceBookingsRef,
+    where('bookId', '==', bookId),
+    where('status', '==', ADVANCE_BOOKING_STATUS.WAITING)
+  );
+  const waitingSnap = await getDocs(waitingQ);
+  const position = waitingSnap.size + 1;
+
+  const booking = {
+    bookId,
+    studentId,
+    position,
+    status: ADVANCE_BOOKING_STATUS.WAITING,
+    createdAt: serverTimestamp(),
+    notifiedAt: null,
+    expiresAt: null,
+  };
+
+  const docRef = await addDoc(advanceBookingsRef, booking);
+  return { id: docRef.id, ...booking, position, message: `Advance booking placed! You are #${position} in the queue.` };
+};
+
+/**
+ * Student cancels their advance booking.
+ */
+export const cancelAdvanceBooking = async (bookingId, studentId) => {
+  const bookingRef = doc(db, 'advance_bookings', bookingId);
+  const bookingDoc = await getDoc(bookingRef);
+
+  if (!bookingDoc.exists()) throw new Error('Booking not found.');
+  const data = bookingDoc.data();
+
+  if (data.studentId !== studentId) throw new Error('Not authorized.');
+  if (data.status !== ADVANCE_BOOKING_STATUS.WAITING && data.status !== ADVANCE_BOOKING_STATUS.READY) {
+    throw new Error('Cannot cancel this booking.');
+  }
+
+  await updateDoc(bookingRef, { status: ADVANCE_BOOKING_STATUS.CANCELLED });
+  return { success: true };
+};
+
+/**
+ * Get advance bookings for a specific student.
+ */
+export const getStudentAdvanceBookings = async (studentId) => {
+  const q = query(
+    advanceBookingsRef,
+    where('studentId', '==', studentId),
+    where('status', 'in', [ADVANCE_BOOKING_STATUS.WAITING, ADVANCE_BOOKING_STATUS.READY])
+  );
+  const snap = await getDocs(q);
+
+  const bookings = [];
+  for (const docSnap of snap.docs) {
+    const data = docSnap.data();
+    let bookData = null;
+    try {
+      const bookDoc = await getDoc(doc(db, 'books', data.bookId));
+      if (bookDoc.exists()) bookData = { id: bookDoc.id, ...bookDoc.data() };
+    } catch (e) { /* ignore */ }
+    bookings.push({
+      id: docSnap.id,
+      ...data,
+      book: bookData,
+      createdAt: data.createdAt?.toDate?.()?.toISOString(),
+      expiresAt: data.expiresAt?.toDate?.()?.toISOString(),
+    });
+  }
+  return bookings;
+};
+
+/**
+ * Get all advance bookings for a specific book (admin view / queue check).
+ */
+export const getBookAdvanceQueue = async (bookId) => {
+  const q = query(
+    advanceBookingsRef,
+    where('bookId', '==', bookId),
+    where('status', 'in', [ADVANCE_BOOKING_STATUS.WAITING, ADVANCE_BOOKING_STATUS.READY])
+  );
+  const snap = await getDocs(q);
+
+  const queue = [];
+  for (const docSnap of snap.docs) {
+    const data = docSnap.data();
+    let studentData = null;
+    try {
+      const studentDoc = await getDoc(doc(db, 'students', data.studentId));
+      if (studentDoc.exists()) studentData = { id: studentDoc.id, ...studentDoc.data() };
+    } catch (e) { /* ignore */ }
+    queue.push({
+      id: docSnap.id,
+      ...data,
+      student: studentData,
+      createdAt: data.createdAt?.toDate?.()?.toISOString(),
+      expiresAt: data.expiresAt?.toDate?.()?.toISOString(),
+    });
+  }
+  // Sort by position
+  return queue.sort((a, b) => (a.position || 0) - (b.position || 0));
+};
+
+/**
+ * Process the advance booking queue for a book after a copy becomes available.
+ * Called after a book is returned.
+ * Notifies the first WAITING student and gives them 24 hours.
+ */
+export const processAdvanceQueue = async (bookId) => {
+  // First, expire any READY bookings that have passed their expiry
+  await expireStaleBookings(bookId);
+
+  // Check if there's already a READY booking (someone is already notified)
+  const readyQ = query(
+    advanceBookingsRef,
+    where('bookId', '==', bookId),
+    where('status', '==', ADVANCE_BOOKING_STATUS.READY)
+  );
+  const readySnap = await getDocs(readyQ);
+  if (!readySnap.empty) return; // Someone is already notified — don't promote another
+
+  // Find the first WAITING student
+  const waitingQ = query(
+    advanceBookingsRef,
+    where('bookId', '==', bookId),
+    where('status', '==', ADVANCE_BOOKING_STATUS.WAITING)
+  );
+  const waitingSnap = await getDocs(waitingQ);
+
+  if (waitingSnap.empty) return; // No one is waiting
+
+  // Sort by createdAt to get the first in line
+  const sorted = waitingSnap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.()?.getTime() || 0;
+      const bTime = b.createdAt?.toDate?.()?.getTime() || 0;
+      return aTime - bTime;
+    });
+
+  const first = sorted[0];
+  const expiresAt = new Date(Date.now() + ADVANCE_BOOKING_EXPIRY_HOURS * 60 * 60 * 1000);
+
+  await updateDoc(doc(db, 'advance_bookings', first.id), {
+    status: ADVANCE_BOOKING_STATUS.READY,
+    notifiedAt: serverTimestamp(),
+    expiresAt: Timestamp.fromDate(expiresAt),
+  });
+
+  // Create a notification for the student
+  try {
+    await addDoc(collection(db, 'notifications'), {
+      userId: first.studentId,
+      type: 'advance_booking_ready',
+      message: `Your advance-booked book is now available! You have 24 hours to collect it from the library.`,
+      isRead: false,
+      createdAt: serverTimestamp(),
+    });
+  } catch (e) { /* ignore notification error */ }
+};
+
+/**
+ * Expire READY bookings that have passed their 24-hour window.
+ * Promotes the next person in the queue.
+ */
+export const expireStaleBookings = async (bookId) => {
+  const readyQ = query(
+    advanceBookingsRef,
+    where('bookId', '==', bookId),
+    where('status', '==', ADVANCE_BOOKING_STATUS.READY)
+  );
+  const readySnap = await getDocs(readyQ);
+  const now = new Date();
+
+  for (const docSnap of readySnap.docs) {
+    const data = docSnap.data();
+    const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
+
+    if (now > expiresAt) {
+      await updateDoc(doc(db, 'advance_bookings', docSnap.id), {
+        status: ADVANCE_BOOKING_STATUS.EXPIRED,
+      });
+
+      // Notify the student their booking expired
+      try {
+        await addDoc(collection(db, 'notifications'), {
+          userId: data.studentId,
+          type: 'advance_booking_expired',
+          message: `Your advance booking has expired because you did not collect the book within 24 hours.`,
+          isRead: false,
+          createdAt: serverTimestamp(),
+        });
+      } catch (e) { /* ignore */ }
+    }
+  }
+};
+
+/**
+ * Mark an advance booking as fulfilled (student borrowed the book).
+ */
+export const fulfillAdvanceBooking = async (studentId, bookId) => {
+  const q = query(
+    advanceBookingsRef,
+    where('studentId', '==', studentId),
+    where('bookId', '==', bookId),
+    where('status', '==', ADVANCE_BOOKING_STATUS.READY)
+  );
+  const snap = await getDocs(q);
+  
+  for (const docSnap of snap.docs) {
+    await updateDoc(doc(db, 'advance_bookings', docSnap.id), {
+      status: ADVANCE_BOOKING_STATUS.FULFILLED,
+    });
+  }
+};
+
+/**
+ * Get all advance bookings for admin view.
+ */
+export const getAllAdvanceBookings = async () => {
+  const q = query(
+    advanceBookingsRef,
+    where('status', 'in', [ADVANCE_BOOKING_STATUS.WAITING, ADVANCE_BOOKING_STATUS.READY])
+  );
+  const snap = await getDocs(q);
+
+  const bookings = [];
+  for (const docSnap of snap.docs) {
+    const data = docSnap.data();
+    let studentData = null;
+    let bookData = null;
+    try {
+      const studentDoc = await getDoc(doc(db, 'students', data.studentId));
+      if (studentDoc.exists()) studentData = { id: studentDoc.id, ...studentDoc.data() };
+    } catch (e) { /* ignore */ }
+    try {
+      const bookDoc = await getDoc(doc(db, 'books', data.bookId));
+      if (bookDoc.exists()) bookData = { id: bookDoc.id, ...bookDoc.data() };
+    } catch (e) { /* ignore */ }
+
+    bookings.push({
+      id: docSnap.id,
+      ...data,
+      student: studentData,
+      book: bookData,
+      createdAt: data.createdAt?.toDate?.()?.toISOString(),
+      expiresAt: data.expiresAt?.toDate?.()?.toISOString(),
+    });
+  }
+  return bookings.sort((a, b) => (a.position || 0) - (b.position || 0));
+};
+

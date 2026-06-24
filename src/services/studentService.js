@@ -81,3 +81,11 @@ export const deleteStudent = async (library_card_id) => {
   const studentDoc = doc(studentsRef, library_card_id);
   await deleteDoc(studentDoc);
 };
+
+/**
+ * Update a student (Admin)
+ */
+export const updateStudent = async (library_card_id, data) => {
+  const studentDoc = doc(studentsRef, library_card_id);
+  await updateDoc(studentDoc, data);
+};

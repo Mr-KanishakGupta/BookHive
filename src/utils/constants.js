@@ -38,6 +38,17 @@ export const RESERVATION_STATUS = {
   COMPLETED: 'COMPLETED',
 };
 
+// ─── Advance Booking Statuses ──────────────────────────
+export const ADVANCE_BOOKING_STATUS = {
+  WAITING: 'WAITING',
+  READY: 'READY',
+  EXPIRED: 'EXPIRED',
+  FULFILLED: 'FULFILLED',
+  CANCELLED: 'CANCELLED',
+};
+
+export const ADVANCE_BOOKING_EXPIRY_HOURS = 24;
+
 // ─── Notification Types ────────────────────────────────
 export const NOTIFICATION_TYPE = {
   ISSUE_APPROVED: 'issue_approved',
@@ -45,5 +56,7 @@ export const NOTIFICATION_TYPE = {
   RETURN_REMINDER: 'return_reminder',
   FINE_UPDATE: 'fine_update',
   RESERVATION_AVAILABLE: 'reservation_available',
+  ADVANCE_BOOKING_READY: 'advance_booking_ready',
+  ADVANCE_BOOKING_EXPIRED: 'advance_booking_expired',
   SYSTEM: 'system',
 };

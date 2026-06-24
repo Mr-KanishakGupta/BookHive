@@ -26,24 +26,19 @@ router.post('/daily-fines', async (req, res) => {
         const msPerDay = 1000 * 60 * 60 * 24;
         const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / msPerDay);
         
-        let newFine = 0;
-        let shouldBlacklist = false;
-
-        if (daysOverdue <= 7) {
-            newFine = daysOverdue * 30;
-        } else {
-            const bookDoc = await db.collection("books").doc(dueBook.bookId).get();
-            const bookCost = bookDoc.exists ? bookDoc.data().cost : 0;
-            newFine = 0.5 * bookCost;
-            shouldBlacklist = true;
-        }
+        const bookDoc = await db.collection("books").doc(dueBook.bookId).get();
+        const bookCost = bookDoc.exists ? (bookDoc.data().cost || bookDoc.data().price || 0) : 0;
+        const dailyPenalty = bookCost > 0 ? bookCost * 0.05 : 35;
+        
+        const newFine = daysOverdue * dailyPenalty;
+        const shouldBlacklist = daysOverdue >= 7;
 
         await doc.ref.update({ fine: newFine });
 
         if (dueBook.borrowRecordId) {
             await db.collection("borrow_records").doc(dueBook.borrowRecordId).update({
                 fine: newFine,
-                status: shouldBlacklist ? false : true 
+                status: shouldBlacklist ? "BLOCKED" : "OVERDUE"
             });
         }
 

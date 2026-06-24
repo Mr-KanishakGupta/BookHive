@@ -4,6 +4,7 @@ import {
   deleteDoc, query, where, orderBy, serverTimestamp 
 } from 'firebase/firestore';
 import { BORROW_STATUS, BORROW_DURATION_DAYS } from '../utils/constants';
+import { processAdvanceQueue, fulfillAdvanceBooking } from './bookService';
 
 const borrowRef = collection(db, 'borrow_records');
 const dueBooksRef = collection(db, 'due_books');
@@ -166,6 +167,11 @@ export const approveBorrow = async (borrowRecordId, adminId) => {
     fine: 0
   });
 
+  // Mark any advance booking as fulfilled
+  try {
+    await fulfillAdvanceBooking(recordData.studentId, recordData.bookId);
+  } catch (e) { /* ignore */ }
+
   return { success: true };
 };
 
@@ -211,6 +217,13 @@ export const returnBook = async (borrowRecordId) => {
      dueBooksSnap.forEach(async (docSnap) => {
          await deleteDoc(doc(db, 'due_books', docSnap.id));
      });
+  }
+
+  // Process advance booking queue — notify next student in FCFS queue
+  try {
+    await processAdvanceQueue(recordData.bookId);
+  } catch (e) {
+    console.error('Error processing advance queue:', e);
   }
 
   return { success: true, fine: recordData.fine };

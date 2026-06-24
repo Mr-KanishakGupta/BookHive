@@ -1,27 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, StatusBar, Alert, ActivityIndicator } from 'react-native';
-import { Menu, Clock, CheckCircle, XCircle, User, BookOpen, Calendar, Mail, RotateCcw } from 'lucide-react-native';
+import { Menu, Clock, CheckCircle, XCircle, User, BookOpen, Calendar, Mail, RotateCcw, Bookmark } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
 import {
   getPendingRequests, approveBorrow, rejectBorrow,
   getPendingExtensions, approveExtension, rejectExtension,
 } from '../../services/borrowService';
+import { getAllAdvanceBookings, cancelAdvanceBooking } from '../../services/bookService';
 
 const RequestsScreen = ({ navigation }) => {
   const [tab, setTab] = useState('borrow');
   const [borrowReqs, setBorrowReqs] = useState([]);
   const [extensionReqs, setExtensionReqs] = useState([]);
+  const [advanceBookings, setAdvanceBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchRequests = async () => {
     setIsLoading(true);
     try {
-      const [borrows, extensions] = await Promise.all([
+      const [borrows, extensions, bookings] = await Promise.all([
         getPendingRequests(),
         getPendingExtensions(),
+        getAllAdvanceBookings(),
       ]);
       setBorrowReqs(borrows);
       setExtensionReqs(extensions);
+      setAdvanceBookings(bookings);
     } catch (e) {
       console.error(e);
       Alert.alert('Error', 'Failed to load requests');
@@ -75,6 +79,26 @@ const RequestsScreen = ({ navigation }) => {
     } catch (e) {
       Alert.alert('Error', e.message);
     }
+  };
+
+  // ─── Advance Booking Handlers ─────────────────────────────────────────
+  const handleCancelAdvanceBooking = async (bookingId, studentId) => {
+    Alert.alert('Cancel Booking', 'Cancel this advance booking?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Yes, Cancel',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await cancelAdvanceBooking(bookingId, studentId);
+            Alert.alert('Cancelled', 'Advance booking cancelled.');
+            fetchRequests();
+          } catch (e) {
+            Alert.alert('Error', e.message);
+          }
+        },
+      },
+    ]);
   };
 
   // ─── Renderers ────────────────────────────────────────────────────────
@@ -145,8 +169,71 @@ const RequestsScreen = ({ navigation }) => {
     );
   };
 
-  const data = tab === 'borrow' ? borrowReqs : extensionReqs;
-  const pendingCount = tab === 'borrow' ? borrowReqs.length : extensionReqs.length;
+  const renderAdvanceBooking = ({ item }) => {
+    const student = item.student;
+    const book = item.book;
+    const isReady = item.status === 'READY';
+    const expiresAt = item.expiresAt ? new Date(item.expiresAt).toLocaleString() : 'N/A';
+
+    return (
+      <View style={s.reqCard}>
+        <View style={s.reqTop}>
+          <View style={[s.reqAvatar, { backgroundColor: isReady ? AdminColors.greenLight : AdminColors.purpleLight }]}>
+            <Bookmark size={20} color={isReady ? AdminColors.green : AdminColors.purple} />
+          </View>
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={s.reqName}>{student?.name || student?.id || item.studentId}</Text>
+            <Text style={s.reqEmail}>Library Card: {student?.id || item.studentId}</Text>
+            <View style={s.reqRow}><BookOpen size={13} color={AdminColors.textMuted} /><Text style={s.reqInfo}>Book: {book?.title || item.bookId}</Text></View>
+            <View style={s.reqRow}>
+              <Bookmark size={13} color={AdminColors.textMuted} />
+              <Text style={s.reqInfo}>Queue Position: #{item.position}</Text>
+            </View>
+            <View style={[s.statusChip, { backgroundColor: isReady ? AdminColors.greenLight : AdminColors.purpleLight }]}>
+              <Text style={[s.statusChipText, { color: isReady ? AdminColors.green : AdminColors.purple }]}>
+                {isReady ? '🔔 READY — Awaiting Collection' : '⏳ WAITING'}
+              </Text>
+            </View>
+            {isReady && (
+              <View style={s.reqRow}>
+                <Clock size={13} color={AdminColors.orange} />
+                <Text style={[s.reqInfo, { color: AdminColors.orange }]}>Expires: {expiresAt}</Text>
+              </View>
+            )}
+          </View>
+          <View style={s.reqActions}>
+            <TouchableOpacity
+              style={s.rejectBtn}
+              onPress={() => handleCancelAdvanceBooking(item.id, item.studentId)}
+            >
+              <XCircle size={16} color={AdminColors.red} /><Text style={s.rejText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        <View style={s.reqNote}>
+          <Bookmark size={12} color={AdminColors.textMuted} />
+          <Text style={s.noteText}>
+            {isReady ? 'Student has been notified. 24h window to collect.' : 'Student will be notified when book becomes available.'}
+          </Text>
+        </View>
+      </View>
+    );
+  };
+
+  const getData = () => {
+    if (tab === 'borrow') return borrowReqs;
+    if (tab === 'extension') return extensionReqs;
+    return advanceBookings;
+  };
+
+  const getRenderer = () => {
+    if (tab === 'borrow') return renderBorrow;
+    if (tab === 'extension') return renderExtension;
+    return renderAdvanceBooking;
+  };
+
+  const pendingCount = tab === 'borrow' ? borrowReqs.length : tab === 'extension' ? extensionReqs.length : advanceBookings.length;
+  const tabLabel = tab === 'borrow' ? 'Borrow' : tab === 'extension' ? 'Extension' : 'Advance Booking';
 
   return (
     <View style={s.container}>
@@ -161,12 +248,16 @@ const RequestsScreen = ({ navigation }) => {
       
       <View style={s.tabs}>
         <TouchableOpacity style={[s.tab, tab === 'borrow' && s.tabActive]} onPress={() => setTab('borrow')}>
-          <Text style={[s.tabText, tab === 'borrow' && s.tabTextActive]}>Borrow Requests</Text>
+          <Text style={[s.tabText, tab === 'borrow' && s.tabTextActive]}>Borrows</Text>
           <View style={[s.tabBadge, tab === 'borrow' && s.tabBadgeActive]}><Text style={[s.tabBadgeText, tab === 'borrow' && { color: '#fff' }]}>{borrowReqs.length}</Text></View>
         </TouchableOpacity>
         <TouchableOpacity style={[s.tab, tab === 'extension' && s.tabActive]} onPress={() => setTab('extension')}>
-          <Text style={[s.tabText, tab === 'extension' && s.tabTextActive]}>Extension Requests</Text>
+          <Text style={[s.tabText, tab === 'extension' && s.tabTextActive]}>Extensions</Text>
           <View style={[s.tabBadge, tab === 'extension' && s.tabBadgeActive]}><Text style={[s.tabBadgeText, tab === 'extension' && { color: '#fff' }]}>{extensionReqs.length}</Text></View>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.tab, tab === 'advance' && s.tabActive]} onPress={() => setTab('advance')}>
+          <Text style={[s.tabText, tab === 'advance' && s.tabTextActive]}>Advance</Text>
+          <View style={[s.tabBadge, tab === 'advance' && s.tabBadgeActive]}><Text style={[s.tabBadgeText, tab === 'advance' && { color: '#fff' }]}>{advanceBookings.length}</Text></View>
         </TouchableOpacity>
       </View>
       
@@ -174,7 +265,7 @@ const RequestsScreen = ({ navigation }) => {
         <View style={s.alert}>
           <Clock size={18} color={AdminColors.orange} />
           <View style={{ marginLeft: 10 }}>
-            <Text style={s.alertTitle}>{pendingCount} Pending {tab === 'borrow' ? 'Borrow' : 'Extension'} Requests</Text>
+            <Text style={s.alertTitle}>{pendingCount} Pending {tabLabel} Requests</Text>
             <Text style={s.alertSub}>Review these requests as soon as possible</Text>
           </View>
         </View>
@@ -186,12 +277,12 @@ const RequestsScreen = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
-          data={data}
+          data={getData()}
           keyExtractor={i => i.id}
-          renderItem={tab === 'borrow' ? renderBorrow : renderExtension}
+          renderItem={getRenderer()}
           contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={<View style={s.empty}><Text style={s.emptyText}>No pending {tab} requests</Text></View>}
+          ListEmptyComponent={<View style={s.empty}><Text style={s.emptyText}>No pending {tabLabel.toLowerCase()} requests</Text></View>}
         />
       )}
     </View>
@@ -207,11 +298,11 @@ const s = StyleSheet.create({
   tabs: { flexDirection: 'row', marginHorizontal: 16, marginBottom: 12, backgroundColor: '#fff', borderRadius: 12, padding: 4, borderWidth: 1, borderColor: AdminColors.border },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10 },
   tabActive: { backgroundColor: AdminColors.navy },
-  tabText: { fontSize: 13, fontWeight: '600', color: AdminColors.textSecondary },
+  tabText: { fontSize: 12, fontWeight: '600', color: AdminColors.textSecondary },
   tabTextActive: { color: '#fff' },
-  tabBadge: { marginLeft: 6, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8, backgroundColor: AdminColors.bgGrey },
+  tabBadge: { marginLeft: 4, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 8, backgroundColor: AdminColors.bgGrey },
   tabBadgeActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
-  tabBadgeText: { fontSize: 11, fontWeight: '700', color: AdminColors.textSecondary },
+  tabBadgeText: { fontSize: 10, fontWeight: '700', color: AdminColors.textSecondary },
   alert: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 16, marginBottom: 12, padding: 14, backgroundColor: AdminColors.orangeLight, borderRadius: 12, borderLeftWidth: 4, borderLeftColor: AdminColors.orange },
   alertTitle: { fontSize: 14, fontWeight: '700', color: AdminColors.orange },
   alertSub: { fontSize: 11, color: AdminColors.orange, marginTop: 1, opacity: 0.8 },
@@ -230,6 +321,8 @@ const s = StyleSheet.create({
   rejText: { fontSize: 12, fontWeight: '600', color: AdminColors.red, marginLeft: 4 },
   reqNote: { flexDirection: 'row', alignItems: 'center', marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: AdminColors.border },
   noteText: { fontSize: 11, color: AdminColors.textMuted, marginLeft: 6 },
+  statusChip: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 6 },
+  statusChipText: { fontSize: 11, fontWeight: '700' },
   empty: { alignItems: 'center', paddingTop: 80 },
   emptyText: { fontSize: 16, color: AdminColors.textMuted },
 });
