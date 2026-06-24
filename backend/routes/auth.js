@@ -2,47 +2,40 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 const admin = require('firebase-admin');
-const { google } = require('googleapis');
 
-const CLIENT_ID = process.env.GMAIL_CLIENT_ID;
-const CLIENT_SECRET = process.env.GMAIL_CLIENT_SECRET;
-const REFRESH_TOKEN = process.env.GMAIL_REFRESH_TOKEN;
-const FROM_EMAIL = process.env.GMAIL_EMAIL; // e.g. "BookHive <your.email@gmail.com>"
-
-const oAuth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, 'https://developers.google.com/oauthplayground');
-oAuth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
-const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
+const BREVO_API_KEY = process.env.BREVO_API_KEY;
+const SENDER_EMAIL = process.env.SENDER_EMAIL || 'projectpurpose695@gmail.com';
+const SENDER_NAME = process.env.SENDER_NAME || 'BookHive Library';
 
 // ────────────────────────────────────────────────────────────────────────────
-// Helper: send email via Gmail REST API (Bypasses Render SMTP Block)
+// Helper: send email via Brevo HTTP API (NOT SMTP — bypasses Render block)
 // ────────────────────────────────────────────────────────────────────────────
 const sendEmail = async (to, subject, text) => {
   try {
-    const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
-    const messageParts = [
-      `From: ${FROM_EMAIL}`,
-      `To: ${to}`,
-      `Content-Type: text/plain; charset=utf-8`,
-      `MIME-Version: 1.0`,
-      `Subject: ${utf8Subject}`,
-      '',
-      text
-    ];
-    
-    const message = messageParts.join('\n');
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
-    const res = await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodedMessage }
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': BREVO_API_KEY,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: SENDER_NAME, email: SENDER_EMAIL },
+        to: [{ email: to }],
+        subject: subject,
+        textContent: text,
+      }),
     });
-    
-    console.log(`Email sent to ${to}:`, res.data.id);
-    return res.data;
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('Brevo error:', data);
+      throw new Error(data.message || 'Email send failed');
+    }
+
+    console.log(`Email sent to ${to}:`, data.messageId);
+    return data;
   } catch (err) {
     console.error('Email send error:', err.message);
     throw err;
