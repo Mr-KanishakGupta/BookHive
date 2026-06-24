@@ -5,12 +5,12 @@ import {
 } from 'react-native';
 import {
   Menu, Search, UserPlus, Mail, Building2, BookOpen,
-  AlertCircle, Eye, Users as UsersIcon, Trash2
+  AlertCircle, Eye, Users as UsersIcon, Trash2, Unlock, Lock
 } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
 import { getAllStudents, createStudent, deleteStudent, updateStudent } from '../../services/studentService';
 import { recalculateFinesNow } from '../../services/fineService';
-import { collection, query, where, getCountFromServer, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getCountFromServer, getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
 const StudentsScreen = ({ navigation }) => {
@@ -28,6 +28,7 @@ const StudentsScreen = ({ navigation }) => {
   const [editStudentData, setEditStudentData] = useState({ name: '', libraryCardId: '', email: '', usn: '' });
   const [filterTab, setFilterTab] = useState('All'); // 'All' | 'Blocked'
   const [studentBooks, setStudentBooks] = useState({});
+  const [unblockingId, setUnblockingId] = useState(null);
 
   const fetchStudents = async () => {
     setIsLoading(true);
@@ -175,6 +176,43 @@ const StudentsScreen = ({ navigation }) => {
     }
   };
 
+  const handleUnblockStudent = (item) => {
+    if (item.fineAmount > 0) {
+      Alert.alert(
+        'Cannot Unblock',
+        `${item.name || item.library_card_id} has an outstanding fine of ₹${item.fineAmount}. Please ensure all fines are paid before unblocking.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      'Unblock Student',
+      `Are you sure you want to unblock ${item.name || item.library_card_id}? They will regain full access to library services.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unblock',
+          style: 'default',
+          onPress: async () => {
+            setUnblockingId(item.library_card_id);
+            try {
+              await updateDoc(doc(db, 'students', item.library_card_id), {
+                isBlacklisted: false,
+              });
+              Alert.alert('Success', `${item.name || item.library_card_id} has been unblocked and can now access all library features.`);
+              fetchStudents();
+            } catch (e) {
+              Alert.alert('Error', 'Failed to unblock student. Please try again.');
+            } finally {
+              setUnblockingId(null);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const initialColors = ['#003366', '#6F42C1', '#28A745', '#DC3545', '#F57C00'];
 
   const renderStudent = ({ item, index }) => {
@@ -216,8 +254,40 @@ const StudentsScreen = ({ navigation }) => {
               <Trash2 size={14} color={AdminColors.red} /><Text style={[s.detText, { color: AdminColors.red }]}>Delete</Text>
             </TouchableOpacity>
           </View>
-          {(item.fineAmount > 0 || item.isBlacklisted) && (
-            <View style={[s.badge, {marginTop: 8}]}><Text style={s.badgeText}>{item.isBlacklisted ? 'Blacklisted' : 'Has Fines'}</Text></View>
+
+          {/* Status badges */}
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            {item.isBlacklisted && (
+              <View style={s.badge}><Lock size={10} color={AdminColors.red} /><Text style={[s.badgeText, { marginLeft: 4 }]}>Blacklisted</Text></View>
+            )}
+            {!item.isBlacklisted && item.fineAmount > 0 && (
+              <View style={[s.badge, { backgroundColor: AdminColors.orangeLight }]}>
+                <Text style={[s.badgeText, { color: AdminColors.orange }]}>Has Fines</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Unblock button — only shown for blacklisted students */}
+          {item.isBlacklisted && (
+            <TouchableOpacity
+              style={[
+                s.unblockBtn,
+                item.fineAmount > 0 && s.unblockBtnDisabled
+              ]}
+              onPress={() => handleUnblockStudent(item)}
+              disabled={unblockingId === item.library_card_id}
+            >
+              {unblockingId === item.library_card_id ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Unlock size={14} color="#fff" />
+                  <Text style={s.unblockText}>
+                    {item.fineAmount > 0 ? 'Pending Fine Payment' : 'Unblock Student'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
           )}
         </View>
       </View>
@@ -414,8 +484,11 @@ const s = StyleSheet.create({
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 },
   detBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: AdminColors.border },
   detText: { fontSize: 11, fontWeight: '500', color: AdminColors.textSecondary, marginLeft: 4 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: AdminColors.redLight },
+  badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: AdminColors.redLight },
   badgeText: { fontSize: 10, fontWeight: '600', color: AdminColors.red },
+  unblockBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: AdminColors.green, paddingVertical: 9, paddingHorizontal: 14, borderRadius: 10, marginTop: 12, gap: 6 },
+  unblockBtnDisabled: { backgroundColor: AdminColors.textMuted },
+  unblockText: { fontSize: 13, fontWeight: '600', color: '#fff' },
   empty: { alignItems: 'center', paddingTop: 80 },
   emptyT: { fontSize: 16, color: AdminColors.textMuted, marginTop: 12 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
