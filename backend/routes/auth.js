@@ -306,4 +306,61 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// 6. Delete Student (Admin — removes Firestore doc + Firebase Auth user)
+// ────────────────────────────────────────────────────────────────────────────
+router.post('/delete-student', async (req, res) => {
+  const { libraryCardNumber } = req.body;
+  if (!libraryCardNumber) {
+    return res.status(400).json({ error: "Library card number is required." });
+  }
+
+  try {
+    const db = admin.firestore();
+    const studentDoc = await db.collection("students").doc(libraryCardNumber).get();
+
+    if (!studentDoc.exists) {
+      return res.status(404).json({ error: "Student not found." });
+    }
+
+    const studentData = studentDoc.data();
+
+    // Delete Firebase Auth user if one exists
+    if (studentData.authUid) {
+      try {
+        await admin.auth().deleteUser(studentData.authUid);
+        console.log(`Deleted Auth user: ${studentData.authUid}`);
+      } catch (authErr) {
+        // User might already be deleted from Auth — that's fine
+        console.warn(`Auth user delete warning: ${authErr.message}`);
+      }
+    } else if (studentData.college_id) {
+      // Fallback: try to find Auth user by email
+      try {
+        const userRecord = await admin.auth().getUserByEmail(studentData.college_id);
+        await admin.auth().deleteUser(userRecord.uid);
+        console.log(`Deleted Auth user by email: ${studentData.college_id}`);
+      } catch (authErr) {
+        // No Auth user found — that's fine (student never registered)
+        console.warn(`Auth user lookup warning: ${authErr.message}`);
+      }
+    }
+
+    // Delete the Firestore document
+    await db.collection("students").doc(libraryCardNumber).delete();
+
+    // Also clean up any related OTPs
+    try {
+      await db.collection("otps").doc(libraryCardNumber).delete();
+      await db.collection("password_reset_otps").doc(libraryCardNumber).delete();
+    } catch (e) { /* ignore */ }
+
+    return res.json({ success: true, message: "Student deleted successfully." });
+
+  } catch (error) {
+    console.error("Delete Student Error:", error);
+    return res.status(500).json({ error: error.message || "Failed to delete student." });
+  }
+});
+
 module.exports = router;

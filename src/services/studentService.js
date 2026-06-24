@@ -75,11 +75,21 @@ export const getBlacklistedStudents = async () => {
 };
 
 /**
- * Delete a student (Admin)
+ * Delete a student (Admin) — deletes Firestore doc + Firebase Auth user
  */
 export const deleteStudent = async (library_card_id) => {
-  const studentDoc = doc(studentsRef, library_card_id);
-  await deleteDoc(studentDoc);
+  const API_URL = "https://bookhive-31uu.onrender.com/api";
+
+  const response = await fetch(`${API_URL}/auth/delete-student`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ libraryCardNumber: library_card_id })
+  });
+
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Failed to delete student');
+
+  return result;
 };
 
 /**
