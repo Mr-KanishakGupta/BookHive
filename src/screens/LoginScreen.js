@@ -171,13 +171,7 @@ const LoginScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Demo credentials hint */}
-        <View style={[styles.demoHint, { backgroundColor: colors.infoLight, borderColor: colors.info }]}>
-          <Ionicons name="information-circle" size={16} color={colors.info} />
-          <Text style={[Typography.caption, { color: colors.info, marginLeft: 6, flex: 1 }]}>
-            Demo: arjun.sharma@bmsce.ac.in / student123
-          </Text>
-        </View>
+
       </ScrollView>
     </KeyboardAvoidingView>
   );

@@ -140,3 +140,25 @@ export const AdminColors = {
   adminButtonFill: '#003366',
   adminButtonOutline: 'rgba(255,255,255,0.3)',
 };
+
+// Admin dark mode palette
+export const AdminColorsDark = {
+  ...AdminColors,
+  navy: '#4DA3FF',
+  navyLight: '#5CB8FF',
+  navyDark: '#3A8FE8',
+  navyDeep: '#0A1628',
+  white: '#1E1E1E',
+  bgGrey: '#121212',
+  greenLight: '#1A3D1A',
+  orangeLight: '#3D2E10',
+  redLight: '#3D2020',
+  blueLight: '#1A2A3D',
+  purpleLight: '#2A1A3D',
+  textPrimary: '#E8EAED',
+  textSecondary: '#9AA0A6',
+  textMuted: '#5F6368',
+  border: '#2C2C2C',
+  divider: '#2C2C2C',
+};
+

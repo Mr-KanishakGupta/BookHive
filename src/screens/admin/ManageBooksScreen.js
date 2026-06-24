@@ -1,36 +1,76 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, Image,
-  TextInput, StyleSheet, StatusBar, Alert,
+  TextInput, StyleSheet, StatusBar, Alert, ActivityIndicator
 } from 'react-native';
 import {
   Menu, Search, Plus, Edit3, Trash2, Filter,
   BookOpen,
 } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
-import { BOOKS, DEPARTMENTS } from '../../services/mockData';
+import { getBooks, deleteBook } from '../../services/bookService';
+import { DEPARTMENTS } from '../../utils/constants'; // assuming we have it there, or just define locally
+
+const DEPARTMENTS_LIST = [
+  'All Departments',
+  'Independent',
+  'Computer Science',
+  'Electronics & Communication',
+  'Mechanical Engineering',
+  'Information Science',
+  'Civil Engineering',
+  'Electrical Engineering',
+];
 
 const ManageBooksScreen = ({ navigation }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [selectedDept, setSelectedDept] = useState('All Departments');
   const [showDeptFilter, setShowDeptFilter] = useState(false);
+  const [books, setBooks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchBooks = async () => {
+    setIsLoading(true);
+    try {
+      const data = await getBooks();
+      setBooks(data);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to fetch books');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', fetchBooks);
+    return unsubscribe;
+  }, [navigation]);
+
+  const handleDelete = async (bookCode) => {
+    try {
+      await deleteBook(bookCode);
+      fetchBooks();
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  };
 
   const filteredBooks = useMemo(() => {
-    let result = BOOKS;
+    let result = books;
     if (appliedQuery.trim()) {
       const q = appliedQuery.toLowerCase();
       result = result.filter(b =>
-        b.title.toLowerCase().includes(q) ||
-        b.author.toLowerCase().includes(q) ||
-        b.isbn.toLowerCase().includes(q)
+        b.title?.toLowerCase().includes(q) ||
+        b.author?.toLowerCase().includes(q) ||
+        b.bookCode?.toLowerCase().includes(q)
       );
     }
     if (selectedDept !== 'All Departments') {
       result = result.filter(b => b.department === selectedDept);
     }
     return result;
-  }, [appliedQuery, selectedDept]);
+  }, [appliedQuery, selectedDept, books]);
 
   const handleSearch = () => {
     setAppliedQuery(searchQuery);
@@ -58,13 +98,13 @@ const ManageBooksScreen = ({ navigation }) => {
 
     return (
       <View style={styles.bookRow}>
-        <Image source={{ uri: item.coverUrl }} style={styles.bookCover} />
+        <Image source={{ uri: item.frontImage || 'https://via.placeholder.com/150' }} style={styles.bookCover} />
         <View style={styles.bookInfo}>
           <Text style={styles.bookTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.bookAuthor}>{item.author}</Text>
           <View style={styles.bookMeta}>
             <View style={[styles.tag, { backgroundColor: genreStyle.bg }]}>
-              <Text style={[styles.tagText, { color: genreStyle.color }]}>{item.genre}</Text>
+              <Text style={[styles.tagText, { color: genreStyle.color }]}>{item.genre || 'General'}</Text>
             </View>
             <Text style={styles.deptText}>{item.department}</Text>
           </View>
@@ -74,13 +114,13 @@ const ManageBooksScreen = ({ navigation }) => {
             <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
           </View>
           <Text style={styles.copiesText}>{item.availableCopies}/{item.totalCopies}</Text>
-          <Text style={styles.isbnText}>{item.isbn}</Text>
+          <Text style={styles.isbnText}>{item.bookCode}</Text>
         </View>
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Edit', `Edit ${item.title}`)}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('EditBook', { bookCode: item.bookCode })}>
             <Edit3 size={16} color={AdminColors.blue} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => Alert.alert('Delete', `Delete ${item.title}?`)}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => handleDelete(item.bookCode)}>
             <Trash2 size={16} color={AdminColors.red} />
           </TouchableOpacity>
         </View>
@@ -92,7 +132,6 @@ const ManageBooksScreen = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={AdminColors.bgGrey} />
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.openDrawer()} style={styles.menuBtn}>
           <Menu size={24} color={AdminColors.navy} />
@@ -101,19 +140,18 @@ const ManageBooksScreen = ({ navigation }) => {
           <Text style={styles.headerTitle}>Manage Books</Text>
           <Text style={styles.headerSub}>Add, edit, or remove books from the library</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => Alert.alert('Add Book', 'Add new book form')}>
+        <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('AddBook')}>
           <Plus size={18} color={AdminColors.white} />
           <Text style={styles.addBtnText}>Add New Book</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Search + Filter */}
       <View style={styles.searchRow}>
         <View style={styles.searchBox}>
           <Search size={18} color={AdminColors.textMuted} />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search by title, author, or ISBN..."
+            placeholder="Search by title, author, or code..."
             placeholderTextColor={AdminColors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -132,10 +170,9 @@ const ManageBooksScreen = ({ navigation }) => {
         </TouchableOpacity>
       </View>
 
-      {/* Dept filter dropdown */}
       {showDeptFilter && (
         <View style={styles.dropdown}>
-          {DEPARTMENTS.map(dept => (
+          {DEPARTMENTS_LIST.map(dept => (
             <TouchableOpacity
               key={dept}
               style={[styles.dropdownItem, selectedDept === dept && styles.dropdownActive]}
@@ -149,20 +186,25 @@ const ManageBooksScreen = ({ navigation }) => {
 
       <Text style={styles.countText}>{filteredBooks.length} books found</Text>
 
-      {/* Book List */}
-      <FlatList
-        data={filteredBooks}
-        keyExtractor={(item) => item.id}
-        renderItem={renderBook}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <BookOpen size={48} color={AdminColors.textMuted} />
-            <Text style={styles.emptyText}>No books found</Text>
-          </View>
-        }
-      />
+      {isLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={AdminColors.navy} />
+        </View>
+      ) : (
+        <FlatList
+          data={filteredBooks}
+          keyExtractor={(item) => item.bookCode || item.id}
+          renderItem={renderBook}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <BookOpen size={48} color={AdminColors.textMuted} />
+              <Text style={styles.emptyText}>No books found</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 };

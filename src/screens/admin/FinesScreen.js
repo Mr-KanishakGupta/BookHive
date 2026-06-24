@@ -1,14 +1,70 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, StatusBar, Alert } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, FlatList, TouchableOpacity, TextInput, StyleSheet, StatusBar, Alert, ActivityIndicator } from 'react-native';
 import { Menu, Search, DollarSign, CheckCircle, AlertCircle, User, Mail, Building2, BookOpen, Calendar } from 'lucide-react-native';
 import { AdminColors } from '../../theme/colors';
-import { FINES, STUDENTS, BOOKS } from '../../services/mockData';
+import { getDueBooks, markFinePaid } from '../../services/fineService';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 const FinesScreen = ({ navigation }) => {
   const [tab, setTab] = useState('unpaid');
   const [searchQuery, setSearchQuery] = useState('');
-  const unpaid = FINES.filter(f => f.status === 'unpaid');
-  const paid = FINES.filter(f => f.status === 'paid');
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const [unpaid, setUnpaid] = useState([]);
+  const [paid, setPaid] = useState([]);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      // Unpaid from due_books
+      const dues = await getDueBooks();
+      const unpaidMapped = dues.map(d => ({
+        id: d.id,
+        studentId: d.studentId,
+        bookId: d.bookId,
+        amount: d.fine,
+        perDay: 30,
+        dueDate: d.dueDate,
+        daysOverdue: Math.floor((new Date() - new Date(d.dueDate)) / (1000 * 60 * 60 * 24)),
+        status: 'unpaid',
+        student: d.student,
+        book: d.book,
+      }));
+      setUnpaid(unpaidMapped);
+
+      // Paid from borrow_records
+      const q = query(collection(db, 'borrow_records'), where('fineStatus', '==', true));
+      const snap = await getDocs(q);
+      
+      const paidMapped = [];
+      for (const doc of snap.docs) {
+        const d = doc.data();
+        paidMapped.push({
+          id: doc.id,
+          studentId: d.studentId,
+          bookId: d.bookId,
+          amount: d.fine,
+          perDay: 30,
+          dueDate: d.dueDate?.toDate?.()?.toISOString(),
+          status: 'paid',
+          // Student and book details would be needed, skipping full fetch for brevity
+          student: { name: d.studentId, email: '', department: '' },
+          book: { title: 'Unknown' },
+        });
+      }
+      setPaid(paidMapped);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const totalUnpaid = unpaid.reduce((s, f) => s + f.amount, 0);
   const totalPaid = paid.reduce((s, f) => s + f.amount, 0);
 
@@ -17,15 +73,23 @@ const FinesScreen = ({ navigation }) => {
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase();
     return list.filter(f => {
-      const student = STUDENTS.find(s => s.id === f.studentId);
-      const book = BOOKS.find(b => b.id === f.bookId);
-      return student?.name.toLowerCase().includes(q) || book?.title.toLowerCase().includes(q);
+      return f.student?.name?.toLowerCase().includes(q) || f.book?.title?.toLowerCase().includes(q) || f.student?.id?.toLowerCase().includes(q);
     });
-  }, [tab, searchQuery]);
+  }, [tab, searchQuery, unpaid, paid]);
+
+  const handleMarkPaid = async (item) => {
+    try {
+      await markFinePaid(item.id);
+      Alert.alert('Paid', `Fine of ₹${item.amount} marked as paid`);
+      fetchData();
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  };
 
   const renderFine = ({ item }) => {
-    const student = STUDENTS.find(s => s.id === item.studentId);
-    const book = BOOKS.find(b => b.id === item.bookId);
+    const student = item.student;
+    const book = item.book;
     const isUnpaid = item.status === 'unpaid';
     return (
       <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: isUnpaid ? AdminColors.orange : AdminColors.green }]}>
@@ -35,11 +99,11 @@ const FinesScreen = ({ navigation }) => {
               <User size={18} color={isUnpaid ? AdminColors.red : AdminColors.green} />
             </View>
             <View style={{ marginLeft: 10, flex: 1 }}>
-              <Text style={s.name}>{student?.name}</Text>
-              <View style={s.infoRow}><Mail size={11} color={AdminColors.textMuted} /><Text style={s.infoText}>{student?.email}</Text></View>
-              <View style={s.infoRow}><Building2 size={11} color={AdminColors.textMuted} /><Text style={s.infoText}>{student?.department}</Text></View>
+              <Text style={s.name}>{student?.name || student?.id}</Text>
+              <View style={s.infoRow}><Mail size={11} color={AdminColors.textMuted} /><Text style={s.infoText}>{student?.college_id || student?.email || 'N/A'}</Text></View>
+              <View style={s.infoRow}><Building2 size={11} color={AdminColors.textMuted} /><Text style={s.infoText}>{student?.department || 'N/A'}</Text></View>
               <View style={s.infoRow}><BookOpen size={11} color={AdminColors.textMuted} /><Text style={s.infoText}>{book?.title}</Text></View>
-              <View style={s.infoRow}><Calendar size={11} color={AdminColors.textMuted} /><Text style={s.infoText}>Due: {item.dueDate}  <Text style={{ color: AdminColors.red }}>{item.daysOverdue} days overdue</Text></Text></View>
+              <View style={s.infoRow}><Calendar size={11} color={AdminColors.textMuted} /><Text style={s.infoText}>Due: {new Date(item.dueDate).toLocaleDateString()}  <Text style={{ color: AdminColors.red }}>{item.daysOverdue > 0 ? `${item.daysOverdue} days overdue` : ''}</Text></Text></View>
             </View>
           </View>
           <View style={s.cardRight}>
@@ -52,7 +116,7 @@ const FinesScreen = ({ navigation }) => {
           </View>
         </View>
         {isUnpaid && (
-          <TouchableOpacity style={s.payBtn} onPress={() => Alert.alert('Paid', `Fine of ₹${item.amount} marked as paid`)}>
+          <TouchableOpacity style={s.payBtn} onPress={() => handleMarkPaid(item)}>
             <CheckCircle size={16} color="#fff" /><Text style={s.payText}>Mark as Paid</Text>
           </TouchableOpacity>
         )}
@@ -70,37 +134,46 @@ const FinesScreen = ({ navigation }) => {
           <Text style={s.sub}>Track and manage student fines</Text>
         </View>
       </View>
-      <View style={s.sumRow}>
-        {[{ icon: DollarSign, v: `₹${totalUnpaid}`, l: 'Total Unpaid Amount', sub: `${unpaid.length} students with pending fines`, ic: AdminColors.red, bg: AdminColors.redLight, border: AdminColors.red },
-          { icon: CheckCircle, v: `₹${totalPaid}`, l: 'Total Paid Amount', sub: `${paid.length} payments collected`, ic: AdminColors.green, bg: AdminColors.greenLight, border: AdminColors.green },
-          { icon: User, v: unpaid.length, l: 'Students with Pending Fines', sub: 'Requires immediate attention', ic: AdminColors.navy, bg: AdminColors.blueLight, border: AdminColors.navy },
-        ].map((c, i) => (
-          <View key={i} style={[s.sumCard, { borderTopWidth: 3, borderTopColor: c.border }]}>
-            <View style={[s.sumIcon, { backgroundColor: c.bg }]}><c.icon size={18} color={c.ic} /></View>
-            <Text style={s.sumLabel}>{c.l}</Text>
-            <Text style={[s.sumVal, { color: c.ic }]}>{c.v}</Text>
-            <Text style={s.sumSub}>{c.sub}</Text>
+      
+      {isLoading ? (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <ActivityIndicator size="large" color={AdminColors.navy} />
           </View>
-        ))}
-      </View>
-      <View style={s.searchBox}>
-        <Search size={18} color={AdminColors.textMuted} />
-        <TextInput style={s.searchIn} placeholder="Search by student name, book title..." placeholderTextColor={AdminColors.textMuted} value={searchQuery} onChangeText={setSearchQuery} />
-      </View>
-      <View style={s.tabs}>
-        <TouchableOpacity style={[s.tab, tab === 'unpaid' && s.tabActive]} onPress={() => setTab('unpaid')}>
-          <AlertCircle size={14} color={tab === 'unpaid' ? '#fff' : AdminColors.textSecondary} />
-          <Text style={[s.tabText, tab === 'unpaid' && s.tabTextA]}>Unpaid Fines ({unpaid.length})</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[s.tab, tab === 'paid' && s.tabActive]} onPress={() => setTab('paid')}>
-          <CheckCircle size={14} color={tab === 'paid' ? '#fff' : AdminColors.textSecondary} />
-          <Text style={[s.tabText, tab === 'paid' && s.tabTextA]}>Paid Fines ({paid.length})</Text>
-        </TouchableOpacity>
-      </View>
-      <FlatList data={data} keyExtractor={i => i.id} renderItem={renderFine}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}
-        ListEmptyComponent={<View style={s.empty}><Text style={s.emptyT}>No fines found</Text></View>}
-      />
+      ) : (
+          <>
+            <View style={s.sumRow}>
+                {[{ icon: DollarSign, v: `₹${totalUnpaid}`, l: 'Total Unpaid Amount', sub: `${unpaid.length} students with pending fines`, ic: AdminColors.red, bg: AdminColors.redLight, border: AdminColors.red },
+                { icon: CheckCircle, v: `₹${totalPaid}`, l: 'Total Paid Amount', sub: `${paid.length} payments collected`, ic: AdminColors.green, bg: AdminColors.greenLight, border: AdminColors.green },
+                { icon: User, v: unpaid.length, l: 'Students with Pending Fines', sub: 'Requires immediate attention', ic: AdminColors.navy, bg: AdminColors.blueLight, border: AdminColors.navy },
+                ].map((c, i) => (
+                <View key={i} style={[s.sumCard, { borderTopWidth: 3, borderTopColor: c.border }]}>
+                    <View style={[s.sumIcon, { backgroundColor: c.bg }]}><c.icon size={18} color={c.ic} /></View>
+                    <Text style={s.sumLabel}>{c.l}</Text>
+                    <Text style={[s.sumVal, { color: c.ic }]}>{c.v}</Text>
+                    <Text style={s.sumSub}>{c.sub}</Text>
+                </View>
+                ))}
+            </View>
+            <View style={s.searchBox}>
+                <Search size={18} color={AdminColors.textMuted} />
+                <TextInput style={s.searchIn} placeholder="Search by student name, book title..." placeholderTextColor={AdminColors.textMuted} value={searchQuery} onChangeText={setSearchQuery} />
+            </View>
+            <View style={s.tabs}>
+                <TouchableOpacity style={[s.tab, tab === 'unpaid' && s.tabActive]} onPress={() => setTab('unpaid')}>
+                <AlertCircle size={14} color={tab === 'unpaid' ? '#fff' : AdminColors.textSecondary} />
+                <Text style={[s.tabText, tab === 'unpaid' && s.tabTextA]}>Unpaid Fines ({unpaid.length})</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[s.tab, tab === 'paid' && s.tabActive]} onPress={() => setTab('paid')}>
+                <CheckCircle size={14} color={tab === 'paid' ? '#fff' : AdminColors.textSecondary} />
+                <Text style={[s.tabText, tab === 'paid' && s.tabTextA]}>Paid Fines ({paid.length})</Text>
+                </TouchableOpacity>
+            </View>
+            <FlatList data={data} keyExtractor={i => i.id} renderItem={renderFine}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} showsVerticalScrollIndicator={false}
+                ListEmptyComponent={<View style={s.empty}><Text style={s.emptyT}>No fines found</Text></View>}
+            />
+          </>
+      )}
     </View>
   );
 };

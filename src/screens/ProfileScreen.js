@@ -73,7 +73,7 @@ const ProfileScreen = ({ navigation }) => {
             <Text style={[Typography.h3, { color: colors.text, marginTop: Spacing.sm }]}>
               {5 - (user?.borrowedBooks?.length || 0)}
             </Text>
-            <Text style={[Typography.caption, { color: colors.textMuted }]}>Slots</Text>
+            <Text style={[Typography.caption, { color: colors.textMuted }]}>Available Slots</Text>
           </View>
         </View>
 

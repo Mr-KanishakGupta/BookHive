@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import * as bookService from '../services/bookService';
+import * as borrowService from '../services/borrowService';
+import * as fineService from '../services/fineService';
 
 const BooksContext = createContext();
 
@@ -12,6 +14,7 @@ export const BooksProvider = ({ children }) => {
   const [recommended, setRecommended] = useState([]);
   const [recentlyAdded, setRecentlyAdded] = useState([]);
   const [popular, setPopular] = useState([]);
+  const [advanceBookings, setAdvanceBookings] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadBooks = useCallback(async () => {
@@ -53,7 +56,7 @@ export const BooksProvider = ({ children }) => {
   const loadActiveBorrows = useCallback(async (studentId) => {
     setIsLoading(true);
     try {
-      const data = await bookService.getActiveBorrows(studentId);
+      const data = await borrowService.getActiveBorrows(studentId);
       setActiveBorrows(data);
     } finally {
       setIsLoading(false);
@@ -63,7 +66,7 @@ export const BooksProvider = ({ children }) => {
   const loadBorrowHistory = useCallback(async (studentId) => {
     setIsLoading(true);
     try {
-      const data = await bookService.getBorrowHistory(studentId);
+      const data = await borrowService.getBorrowHistory(studentId);
       setBorrowHistory(data);
     } finally {
       setIsLoading(false);
@@ -72,21 +75,38 @@ export const BooksProvider = ({ children }) => {
 
   const loadFines = useCallback(async (studentId) => {
     try {
-      const data = await bookService.getStudentFines(studentId);
+      const data = await fineService.getStudentFines(studentId);
       setFines(data);
     } catch (e) { /* ignore */ }
   }, []);
 
   const requestIssue = useCallback(async (studentId, bookId) => {
-    return await bookService.requestIssue(studentId, bookId);
+    if (!studentId) throw new Error('Student ID is missing. Please log out and log back in.');
+    if (!bookId) throw new Error('Book ID is missing.');
+    return await borrowService.requestBorrow(studentId, bookId);
   }, []);
 
   const advanceReserve = useCallback(async (studentId, bookId) => {
-    return await bookService.advanceReserve(studentId, bookId);
+    if (!studentId) throw new Error('Student ID is missing. Please log out and log back in.');
+    if (!bookId) throw new Error('Book ID is missing.');
+    return await bookService.createAdvanceBooking(studentId, bookId);
   }, []);
 
-  const extendBorrow = useCallback(async (borrowRecordId) => {
-    return await bookService.extendBorrow(borrowRecordId);
+  const loadAdvanceBookings = useCallback(async (studentId) => {
+    try {
+      const data = await bookService.getStudentAdvanceBookings(studentId);
+      setAdvanceBookings(data);
+    } catch (e) { /* ignore */ }
+  }, []);
+
+  const cancelAdvanceBookingAction = useCallback(async (bookingId, studentId) => {
+    return await bookService.cancelAdvanceBooking(bookingId, studentId);
+  }, []);
+
+  const extendBorrow = useCallback(async (borrowRecordId, studentId, reason = '') => {
+    if (!borrowRecordId) throw new Error('Borrow record ID is missing.');
+    if (!studentId) throw new Error('Student ID is missing. Please log out and log back in.');
+    return await borrowService.requestExtension(borrowRecordId, studentId, reason);
   }, []);
 
   return (
@@ -99,6 +119,7 @@ export const BooksProvider = ({ children }) => {
       recommended,
       recentlyAdded,
       popular,
+      advanceBookings,
       isLoading,
       loadBooks,
       loadHomeData,
@@ -108,6 +129,8 @@ export const BooksProvider = ({ children }) => {
       loadFines,
       requestIssue,
       advanceReserve,
+      loadAdvanceBookings,
+      cancelAdvanceBookingAction,
       extendBorrow,
     }}>
       {children}
