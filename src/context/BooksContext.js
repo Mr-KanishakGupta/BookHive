@@ -15,6 +15,7 @@ export const BooksProvider = ({ children }) => {
   const [recentlyAdded, setRecentlyAdded] = useState([]);
   const [popular, setPopular] = useState([]);
   const [advanceBookings, setAdvanceBookings] = useState([]);
+  const [pendingRequests, setPendingRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const loadBooks = useCallback(async () => {
@@ -61,6 +62,13 @@ export const BooksProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const loadPendingRequests = useCallback(async (studentId) => {
+    try {
+      const data = await borrowService.getPendingRequestsForStudent(studentId);
+      setPendingRequests(data);
+    } catch (e) { /* ignore */ }
   }, []);
 
   const loadBorrowHistory = useCallback(async (studentId) => {
@@ -115,6 +123,7 @@ export const BooksProvider = ({ children }) => {
       searchResults,
       activeBorrows,
       borrowHistory,
+      pendingRequests,
       fines,
       recommended,
       recentlyAdded,
@@ -127,6 +136,7 @@ export const BooksProvider = ({ children }) => {
       loadActiveBorrows,
       loadBorrowHistory,
       loadFines,
+      loadPendingRequests,
       requestIssue,
       advanceReserve,
       loadAdvanceBookings,

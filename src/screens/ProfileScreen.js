@@ -6,11 +6,18 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useBooks } from '../context/BooksContext';
 import { Typography, BorderRadius, Spacing } from '../theme/typography';
+import { MAX_BORROWED_BOOKS } from '../utils/constants';
 
 const ProfileScreen = ({ navigation }) => {
   const { colors, isDark, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
+  const { activeBorrows, loadActiveBorrows } = useBooks();
+
+  React.useEffect(() => {
+    if (user?.id) loadActiveBorrows(user.id);
+  }, [user]);
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -57,7 +64,7 @@ const ProfileScreen = ({ navigation }) => {
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <Ionicons name="book" size={24} color={colors.primary} />
             <Text style={[Typography.h3, { color: colors.text, marginTop: Spacing.sm }]}>
-              {user?.borrowedBooks?.length || 0}
+              {activeBorrows.length}
             </Text>
             <Text style={[Typography.caption, { color: colors.textMuted }]}>Borrowed</Text>
           </View>
@@ -71,7 +78,7 @@ const ProfileScreen = ({ navigation }) => {
           <View style={[styles.statCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <Ionicons name="layers" size={24} color={colors.success} />
             <Text style={[Typography.h3, { color: colors.text, marginTop: Spacing.sm }]}>
-              {5 - (user?.borrowedBooks?.length || 0)}
+              {MAX_BORROWED_BOOKS - activeBorrows.length}
             </Text>
             <Text style={[Typography.caption, { color: colors.textMuted }]}>Available Slots</Text>
           </View>
@@ -140,14 +147,6 @@ const ProfileScreen = ({ navigation }) => {
             <View style={styles.settingLeft}>
               <Ionicons name="time-outline" size={20} color={colors.primary} />
               <Text style={[Typography.bodySm, { color: colors.text, marginLeft: Spacing.md }]}>Borrow History</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </TouchableOpacity>
-          <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-          <TouchableOpacity onPress={() => navigation.navigate('QRCode')} style={styles.actionRow}>
-            <View style={styles.settingLeft}>
-              <Ionicons name="qr-code-outline" size={20} color={colors.primary} />
-              <Text style={[Typography.bodySm, { color: colors.text, marginLeft: Spacing.md }]}>QR Scanner</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>

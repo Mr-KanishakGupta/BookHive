@@ -48,7 +48,6 @@ const ProfileStack = () => (
   <Stack.Navigator screenOptions={{ headerShown: false, ...TransitionPresets.SlideFromRightIOS }}>
     <Stack.Screen name="ProfileMain" component={ProfileScreen} />
     <Stack.Screen name="BorrowHistory" component={BorrowHistoryScreen} />
-    <Stack.Screen name="QRCode" component={QRCodeScreen} />
     <Stack.Screen name="EditProfile" component={EditProfileScreen} />
   </Stack.Navigator>
 );

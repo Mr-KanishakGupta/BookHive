@@ -9,9 +9,11 @@ import { useAuth } from '../context/AuthContext';
 import { useBooks } from '../context/BooksContext';
 import ExtendBorrowButton from '../components/ExtendBorrowButton';
 import { Typography, BorderRadius, Spacing } from '../theme/typography';
+import { BORROW_STATUS, MAX_BORROWED_BOOKS } from '../utils/constants';
 
 const TABS = [
   { key: 'active', label: 'Borrowed' },
+  { key: 'pending', label: 'Pending' },
   { key: 'overdue', label: 'Overdue' },
   { key: 'history', label: 'History' },
 ];
@@ -21,7 +23,7 @@ const FINE_PER_DAY = 10; // ₹10 per day
 const MyBooksScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { activeBorrows, borrowHistory, fines, loadActiveBorrows, loadBorrowHistory, loadFines, extendBorrow, isLoading } = useBooks();
+  const { activeBorrows, borrowHistory, pendingRequests, fines, loadActiveBorrows, loadBorrowHistory, loadPendingRequests, loadFines, extendBorrow, isLoading } = useBooks();
   const [extendingId, setExtendingId] = useState(null);
   const [activeTab, setActiveTab] = useState('active');
 
@@ -29,6 +31,7 @@ const MyBooksScreen = ({ navigation }) => {
     if (user?.id) {
       loadActiveBorrows(user.id);
       loadBorrowHistory(user.id);
+      loadPendingRequests(user.id);
       loadFines(user.id);
     }
   }, [user]);
@@ -37,6 +40,7 @@ const MyBooksScreen = ({ navigation }) => {
     if (user?.id) {
       loadActiveBorrows(user.id);
       loadBorrowHistory(user.id);
+      loadPendingRequests(user.id);
       loadFines(user.id);
     }
   }, [user]);
@@ -77,34 +81,41 @@ const MyBooksScreen = ({ navigation }) => {
           const daysLeft = getDaysUntilDue(item.dueDate);
           return daysLeft >= 0;
         });
+      case 'pending':
+        return pendingRequests;
       case 'overdue':
         return activeBorrows.filter(item => {
           const daysLeft = getDaysUntilDue(item.dueDate);
           return daysLeft < 0;
         });
       case 'history':
-        return borrowHistory.filter(item => item.status === 'returned');
+        return borrowHistory.filter(item => 
+          item.status === BORROW_STATUS.RETURNED || item.status === BORROW_STATUS.REJECTED
+        );
       default:
         return [];
     }
-  }, [activeTab, activeBorrows, borrowHistory]);
+  }, [activeTab, activeBorrows, borrowHistory, pendingRequests]);
 
   // Badge counts
   const activeCount = useMemo(() =>
     activeBorrows.filter(i => getDaysUntilDue(i.dueDate) >= 0).length
   , [activeBorrows]);
 
+  const pendingCount = useMemo(() => pendingRequests.length, [pendingRequests]);
+
   const overdueCount = useMemo(() =>
     activeBorrows.filter(i => getDaysUntilDue(i.dueDate) < 0).length
   , [activeBorrows]);
 
   const historyCount = useMemo(() =>
-    borrowHistory.filter(i => i.status === 'returned').length
+    borrowHistory.filter(i => i.status === BORROW_STATUS.RETURNED || i.status === BORROW_STATUS.REJECTED).length
   , [borrowHistory]);
 
   const getTabCount = (key) => {
     switch (key) {
       case 'active': return activeCount;
+      case 'pending': return pendingCount;
       case 'overdue': return overdueCount;
       case 'history': return historyCount;
       default: return 0;
@@ -249,6 +260,65 @@ const MyBooksScreen = ({ navigation }) => {
     );
   };
 
+  const renderPendingItem = ({ item }) => {
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '—';
+      const d = new Date(dateStr);
+      return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    return (
+      <View style={[styles.card, {
+        backgroundColor: colors.card,
+        borderColor: colors.cardBorder,
+        borderLeftWidth: 3,
+        borderLeftColor: colors.warning,
+      }]}>
+        <View style={styles.cardHeader}>
+          <View style={{ flex: 1 }}>
+            <Text style={[Typography.bodySmBold, { color: colors.text }]} numberOfLines={1}>
+              {item.book?.title || 'Unknown'}
+            </Text>
+            <Text style={[Typography.caption, { color: colors.textSecondary, marginTop: 2 }]}>
+              {item.book?.author}
+            </Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: colors.warningLight }]}>
+            <Text style={[Typography.captionBold, { color: colors.warning }]}>PENDING</Text>
+          </View>
+        </View>
+
+        <View style={[styles.borrowInfoSection, { backgroundColor: colors.background, borderColor: colors.cardBorder }]}>
+          <View style={styles.borrowInfoRow}>
+            <View style={styles.borrowInfoItem}>
+              <View style={styles.infoIconRow}>
+                <Ionicons name="calendar-outline" size={13} color={colors.primary} />
+                <Text style={[Typography.caption, { color: colors.textMuted, marginLeft: 4 }]}>
+                  Requested
+                </Text>
+              </View>
+              <Text style={[Typography.captionBold, { color: colors.text, marginTop: 2 }]}>
+                {formatDate(item.createdAt)}
+              </Text>
+            </View>
+            <View style={[styles.borrowInfoDivider, { backgroundColor: colors.cardBorder }]} />
+            <View style={styles.borrowInfoItem}>
+              <View style={styles.infoIconRow}>
+                <Ionicons name="hourglass-outline" size={13} color={colors.warning} />
+                <Text style={[Typography.caption, { color: colors.textMuted, marginLeft: 4 }]}>
+                  Status
+                </Text>
+              </View>
+              <Text style={[Typography.captionBold, { color: colors.warning, marginTop: 2 }]}>
+                Pending Approval
+              </Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={colors.background === '#1a1a1a' ? 'light-content' : 'dark-content'} />
@@ -321,23 +391,29 @@ const MyBooksScreen = ({ navigation }) => {
       <FlatList
         data={tabData}
         keyExtractor={(item) => item.id}
-        renderItem={renderBorrowItem}
+        renderItem={activeTab === 'pending' ? renderPendingItem : renderBorrowItem}
         contentContainerStyle={{ padding: Spacing.lg, paddingBottom: Spacing.xxxl }}
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={colors.primary} />}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons
-              name={activeTab === 'overdue' ? 'alert-circle-outline' : activeTab === 'history' ? 'time-outline' : 'book-outline'}
+              name={
+                activeTab === 'pending' ? 'document-text-outline' :
+                activeTab === 'overdue' ? 'alert-circle-outline' :
+                activeTab === 'history' ? 'time-outline' : 'book-outline'
+              }
               size={48}
               color={colors.textMuted}
             />
             <Text style={[Typography.body, { color: colors.textMuted, marginTop: Spacing.lg }]}>
               {activeTab === 'active' && 'No actively borrowed books'}
+              {activeTab === 'pending' && 'No pending requests'}
               {activeTab === 'overdue' && 'No overdue books — great job!'}
               {activeTab === 'history' && 'No return history yet'}
             </Text>
             <Text style={[Typography.bodySm, { color: colors.textMuted, marginTop: Spacing.sm, textAlign: 'center' }]}>
               {activeTab === 'active' && 'Visit Search to find and borrow books'}
+              {activeTab === 'pending' && 'Books you request will appear here until approved'}
               {activeTab === 'overdue' && 'All your books are returned on time'}
               {activeTab === 'history' && 'Books you return will appear here'}
             </Text>

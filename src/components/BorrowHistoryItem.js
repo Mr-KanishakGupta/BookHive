@@ -9,13 +9,18 @@ const BorrowHistoryItem = ({ record }) => {
   const book = record.book;
 
   const getStatusStyle = () => {
-    switch (record.status) {
-      case 'active':
+    const status = record.status?.toUpperCase?.() || '';
+    switch (status) {
+      case 'BORROWED':
         return { bg: colors.successLight, color: colors.success, label: 'Active' };
-      case 'overdue':
+      case 'OVERDUE':
         return { bg: colors.errorLight, color: colors.error, label: 'Overdue' };
-      case 'returned':
+      case 'RETURNED':
         return { bg: colors.infoLight, color: colors.info, label: 'Returned' };
+      case 'PENDING':
+        return { bg: colors.warningLight, color: colors.warning, label: 'Pending' };
+      case 'REJECTED':
+        return { bg: colors.errorLight, color: colors.error, label: 'Rejected' };
       default:
         return { bg: colors.surface, color: colors.textMuted, label: record.status };
     }

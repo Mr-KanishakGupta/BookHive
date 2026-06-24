@@ -9,19 +9,22 @@ import { useAuth } from '../context/AuthContext';
 import { useBooks } from '../context/BooksContext';
 import BookCard from '../components/BookCard';
 import { Typography, BorderRadius, Spacing } from '../theme/typography';
+import { MAX_BORROWED_BOOKS } from '../utils/constants';
 
 const HomeScreen = ({ navigation }) => {
   const { colors } = useTheme();
   const { user } = useAuth();
-  const { recommended, recentlyAdded, popular, loadHomeData, isLoading } = useBooks();
+  const { recommended, recentlyAdded, popular, loadHomeData, activeBorrows, loadActiveBorrows, isLoading } = useBooks();
 
   useEffect(() => {
     loadHomeData();
+    if (user?.id) loadActiveBorrows(user.id);
   }, []);
 
   const onRefresh = useCallback(() => {
     loadHomeData();
-  }, []);
+    if (user?.id) loadActiveBorrows(user.id);
+  }, [user]);
 
   const navigateToBook = (book) => {
     navigation.navigate('BookDetails', { bookId: book.id, book });
@@ -86,13 +89,13 @@ const HomeScreen = ({ navigation }) => {
           <View style={styles.quickStats}>
             <View style={styles.quickStatItem}>
               <Ionicons name="book" size={18} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.quickStatValue}>{user?.borrowedBooks?.length || 0}</Text>
+              <Text style={styles.quickStatValue}>{activeBorrows.length}</Text>
               <Text style={styles.quickStatLabel}>Borrowed</Text>
             </View>
             <View style={[styles.quickStatDivider]} />
             <View style={styles.quickStatItem}>
               <Ionicons name="layers" size={18} color="rgba(255,255,255,0.9)" />
-              <Text style={styles.quickStatValue}>{5 - (user?.borrowedBooks?.length || 0)}</Text>
+              <Text style={styles.quickStatValue}>{MAX_BORROWED_BOOKS - activeBorrows.length}</Text>
               <Text style={styles.quickStatLabel}>Slots Left</Text>
             </View>
             <View style={[styles.quickStatDivider]} />

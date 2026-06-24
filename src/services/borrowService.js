@@ -95,6 +95,11 @@ export const getActiveBorrows = async (studentId) => {
   return allHistory.filter(r => r.status === BORROW_STATUS.BORROWED || r.status === BORROW_STATUS.OVERDUE);
 };
 
+export const getPendingRequestsForStudent = async (studentId) => {
+  const allHistory = await getBorrowHistory(studentId);
+  return allHistory.filter(r => r.status === BORROW_STATUS.PENDING);
+};
+
 // ----------------------------------------------------------------------------
 // Admin Flow
 // ----------------------------------------------------------------------------
